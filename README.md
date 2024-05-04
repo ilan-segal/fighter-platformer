@@ -28,6 +28,7 @@ The project is still in its very early stages and has various goals in the short
 	- Roll
 	- Spotdodge
 ### Long-term
+- Re-mappable controls
 - Combat mechanics
 	- Player damage
 	- Knockback
