@@ -29,6 +29,8 @@ The project is still in its very early stages and has various goals in the short
 	- Spotdodge
 ### Long-term
 - Re-mappable controls
+- Multiplayer
+- Multiple playable characters
 - Combat mechanics
 	- Player damage
 	- Knockback
@@ -38,7 +40,6 @@ The project is still in its very early stages and has various goals in the short
 	- The shapes for these hitboxes is unclear; they might be shaped as rectangles or pills.
 - Very minimal particle system (not too distracting or visually noisy)
 ### Very long-term
-- Multiple playable characters
 - Multiple stages
 - Menus
 - Online play
