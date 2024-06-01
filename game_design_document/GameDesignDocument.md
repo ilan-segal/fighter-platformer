@@ -43,8 +43,8 @@ Each character has two numbers which describe gravity's influence over them:
 #### Weight
 Every character has a unitless positive number which determines how easy they are to launch (see Knockback). This is their weight.
 
-### Wall Collision
-When a character's trajectory would go through a wall, their travel during that frame should stop when it reaches the wall.
+### Stage Collision
+When a character's trajectory would go through a wall, their travel during that frame can't pass through the wall.
 
 #### Stage Spike
 If a character is travelling above a certain threshold speed (same for all characters) and they're in hitstun (see Hitstun), they experience a brief freeze-frame effect as they stick to the wall, then bounce away from the wall, preserving their initial speed. This is called a freeze frame, and it can be negated by a tech (see Tech).
@@ -53,7 +53,7 @@ If a character is travelling above a certain threshold speed (same for all chara
 A special case where the player collides with a perfectly horizontal wall (a floor). If they're not in hitstun or tumble (see Hitstun and Tumble), they land normally. Otherwise, if they are going fast enough for a stage spike (see Stage Spike) they bounce, otherwise they go into knockdown (see Knockdown).
 
 #### Platform Collision
-A special sub-case of floor collision where the player is about to collide with a platform (see Platforms). If the player is holding down on the control stick when they would collide with a platform, they ignore it and pass through.
+A special sub-case of floor collision where the player is about to fall onto a platform (see Platforms). If the player is holding down on the control stick when they would collide with a platform and they're not in hitstun, they ignore the platform and fall through it.
 
 #### Wall Collision Algorithm
 
