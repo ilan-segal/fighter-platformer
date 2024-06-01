@@ -62,19 +62,7 @@ Outlined below is an algorithm for detecting a wall collision and resolving the 
 ![](WallCollisionVectors.png)
 
 On a given frame, a character has position $\mathbf{p}$ and velocity $\mathbf{v}$. In the way of their path, there is a wall defined by two points, $\mathbf{a}$ and $\mathbf{b}$. Let $\mathbf{\hat{n}}$ be the wall's unit normal, defined as:
-
-$$
-\mathbf{\hat{n}}
-=
-\frac{1}{\|\mathbf{b}-\mathbf{a}\|}
-\cdot
-\begin{pmatrix}
-  0 & -1\\ 
-  1 & 0
-\end{pmatrix}
-\cdot
-(\mathbf{b}-\mathbf{a})
-$$
+$$\mathbf{\hat{n}}=\frac{1}{\|\mathbf{b}-\mathbf{a}\|}\cdot\begin{pmatrix}0 & -1\\ 1 & 0 \end{pmatrix}\cdot(\mathbf{b}-\mathbf{a})$$
 
 Unless $\mathbf{v}\cdot\mathbf{\hat{n}}=0$ there must exist some point $\mathbf{c}$ which is on the line from $\mathbf{p}$ along $\mathbf{v}$:
 $$\mathbf{c}=\mathbf{p}+\mathbf{v}\cdot t$$
