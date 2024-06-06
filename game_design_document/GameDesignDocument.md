@@ -132,15 +132,78 @@ d_a &= \|\mathbf{a} - \mathbf{c}\| \notag \\
 d_b &= \|\mathbf{b} - \mathbf{c}\| \notag
 \end{align}
 $
-The third value $d_p$ is the perpendicular (i.e. shortest) distance from $\mathbf{c}$ to the line segment beteen $\mathbf{a}$ and $\mathbf{b}$, which we can compute:
-$$d_p=\|c-a-\frac{b-a}{\|b-a\|}\cdot\left(\left(c-a\right)\cdot\left(c-a\right)\right)\|$$
+The third value $d_p$ is the perpendicular (i.e. shortest) distance from $\mathbf{c}$ to the line segment beteen $\mathbf{a}$ and $\mathbf{b}$. This perpendicular distance only exists if:
+$$0 \le t \le 1$$
+where:
+$$t=\frac{(\mathbf{c}-\mathbf{a})\cdot(\mathbf{b}-\mathbf{a})}{\|\mathbf{b}-\mathbf{a}\|^2}$$
+If such a $t$ exists, then:
+$$d_p=\|\mathbf{c} - (\mathbf{a} + (\mathbf{b}-\mathbf{a})t)\|$$
+Otherwise, we can set $d_p=\infty$ for convenience in calculating the smallest of the three distances.
+
 The distance between the two hitboxes is $\min(d_a, d_b, d_p)-r_p-r_c$
 
 ##### Pill vs. Pill
-To calculate the distance between two pill-shaped hitboxes, treat the endpoints of one hitbox as circles and resolve the minimum distance to the other hitbox. Then perform this same operation with the other hitbox and return the minimum between the four distances.
+To calculate the distance between two pill-shaped hitboxes, first check whether the line segments of the hitboxes intersect. If they do, return $-r_a-r_b$ (the negative sum of the radii of the hitboxes). Otherwise, treat the endpoints of one hitbox as circles and resolve the minimum distance to the other hitbox. Then perform this same operation with the other hitbox and return the minimum between the four distances. 
 
 ### Offensive Options
-TODO
+
+#### Jab
+A fast low-risk-low-reward attack option. Executed by pressing the Attack button while grounded and holding the control stick in a neutral position. This should basically never kill.
+##### 1-2-3 Combo
+Most characters' jabs will have a special sequence of hits that you can execute by pressing the attack button three times in succession. This shouldn't kill until very high percents.
+
+#### Tilt
+A slightly more committal attack in a chosen direction. Executed by pressing the Attack button while grounded and holding the control stick in one of the 4 cardinal directions. Alternatively, you can execute a tilt by tilting the attack stick if one is configured. Variants are:
+- Up-tilt
+- Forward-tilt
+- Down-tilt
+
+Note that the variants aren't supposed to be similar to each other, i.e. they don't need to be 3 different spins on the same general attack. These should generally kill at high percents.
+
+#### Aerials
+While in the air, you can press the Attack button and optionally tilt the control stick in one of the 4 cardinal directions to execute an aerial attack. Alternatively, you can execute an aerial attack by tilting the attack stick or the smash stick if configured. Variants are:
+- Neutral-Air
+- Up-Air
+- Forward-Air
+- Back-Air
+- Down-Air
+
+Some could be finisher moves (killing at medium-to-high percents) but for the most part these moves should be most useful in extending combos or in the neutral game.
+
+#### Smash
+A very committal attack with high lag but high damage and knockback. These are usually considered "finisher moves." Executed by pressing the Attack button while grounded and quickly flicking the control stick in one of the 4 cardinal directions. Alternatively, executed by flicking the smash stick if one is configured. Variants are:
+- Up-Smash
+- Forward-Smash
+- Down-Smash
+
+Smash attacks can be charged up by holding the Attack button or smash stick, which increases its damage and knockback. You can charge up a smash attack for up to 1 second, at which point the smash attack is strengthened by 50%.
+
+These should kill at medium-to-high percents. The fully-charged smash attacks should be able to kill at medium percents.
+
+#### Grab
+A slightly committal move which allows you to grapple your opponent if they're in range, then immediately throw them, dealing some percent and knockback. Variants of the throw are:
+- Up-throw
+- Forward-throw
+- Back-throw
+- Down-throw
+These shouldn't kill until high percents.
+##### No Chaingrabbing
+Repeatedly throwing and then re-grabbing your opponent ("chaingrabbing") should be disallowed by the game's code. You should not be able to re-grab your opponent for 1 second after throwing them.
+
+### Special Moves
+By pressing the Special button and optionally a direction on the control stick, you can execute one of 4 "special" moves. Optionally, you can execute a special by tilting the special stick if configured. Some special moves may behave differently when grounded vs. when airborne. These moves may act like normal attacks but often impart special effects or benefits. General suggestions/guidelines for different special moves are written below, but some characters might break the rules.
+
+#### Neutral-Special
+Usually either a projectile, a quick low-risk low-reward option, or an attack with a long charge-up.
+
+#### Up-Special
+A way for your character to gain height and recover onto stage.
+
+#### Side-Special
+An option for closing the gap between you and your opponent by horizontal movement, a projectile, a command grab, etc.
+
+#### Down-Special
+A "technical" move which rewards creativity or situational awareness rather than attacking head-on.
 
 ### Defensive Options
 
@@ -150,6 +213,11 @@ By holding the shield button while grounded, your character can surround themsel
 When your shield gets hit but doesn't break, you experience "shield stun" where your shield remains up and you are completely unactionable for a small period of time. The amount of stun is proportional to the damage/knockback of the move which hit your shield.
 
 Similarly to *Super Smash Bros. Ultimate*, you can execute a "perfect parry" by dropping the shield at roughly the same time that you get hit (up to a few frames before). When doing so, you experience no shield damage or shield stun, and you have a frame advantage over your opponent.
+
+Shielding should not be an easy response to incoming damage; there must be mechanics in place which ensure that shielding is a tricky option to use:
+- If you drop your shield without executing a perfect parry, there is a small amount of lag where you cannot act.
+- Shield stun should put the defender at a significant frame disadvantage against fast attacks.
+- Shield health should be low enough that shieldbreaking is a significant concern.
 
 #### Spotdodge
 By pressing down on the control stick and shielding at the same time while grounded, you sidestep or "spotdodge" and become completely invincible for a fixed amount of time. Every character has the same frame data for this move.
