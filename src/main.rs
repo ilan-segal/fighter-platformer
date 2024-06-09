@@ -207,10 +207,7 @@ impl PlayerInputs {
 
     fn advance_frame(&mut self) {
         for i in 0..MAX_PLAYER_COUNT {
-            self.0[i].buffered_action = self.0[i]
-                .buffered_action
-                .map(|x| x.aged())
-                .flatten();
+            self.0[i].buffered_action = self.0[i].buffered_action.map(|x| x.aged()).flatten();
         }
     }
 }
@@ -936,6 +933,52 @@ fn update_intangible_tag(
                 .get_entity(id)
                 .expect("Player entity id should exist")
                 .insert(Intangible);
+        }
+    }
+}
+
+enum Shape {
+    Circle { r: f32, p: Vec2 },
+    Pill { r: f32, a: Vec2, b: Vec2 },
+}
+
+impl Shape {
+    fn get_distance(&self, other: &Self) -> f32 {
+        match (self, other) {
+            (
+                Shape::Circle { r, p },
+                Shape::Circle {
+                    r: other_r,
+                    p: other_p,
+                },
+            ) => (*p - *other_p).length() - r - other_r,
+            (Shape::Circle { r, p }, Shape::Pill { r: other_r, a, b }) => {
+                // Distance to endpoints
+                let d_a = (*p - *a).length();
+                let d_b = (*p - *b).length();
+                // Perpendicular distance (see GDD)
+                let t = (*p - *a).dot(*b - *a) / (*b - *a).length_squared();
+                let d_p = if 0.0 <= t && t <= 1.0 {
+                    (*p - (*a + (*b - *a) * t)).length()
+                } else {
+                    f32::INFINITY
+                };
+                [d_a, d_b, d_p]
+                    .into_iter()
+                    .reduce(f32::min)
+                    .expect("Distances should exist")
+                    - r
+                    - other_r
+            }
+            (Shape::Pill { .. }, Shape::Circle { .. }) => other.get_distance(self),
+            (
+                Shape::Pill { r, a, b },
+                Shape::Pill {
+                    r: other_r,
+                    a: other_a,
+                    b: other_b,
+                },
+            ) => todo!(),
         }
     }
 }
