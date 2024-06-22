@@ -1,12 +1,20 @@
 // use std::collections::HashSet;
 
+use std::fmt::Debug;
 use std::{collections::HashSet, ops::Add};
 
 use bevy::{prelude::*, sprite::Anchor};
 use iyes_perf_ui::prelude::*;
 use log::info;
 
-const FRAMES_PER_SECOND: u16 = 60;
+mod fighter;
+mod input;
+mod physics;
+mod utils;
+
+use utils::{FrameCount, FrameNumber};
+
+const FRAMES_PER_SECOND: FrameNumber = 60;
 const GRAVITY: f32 = -0.3;
 const MAX_FLOOR_SLOPE: f32 = 0.1;
 const INPUT_BUFFER_SIZE: u8 = 10;
@@ -41,6 +49,7 @@ fn main() {
         .add_systems(
             FixedUpdate,
             (
+                update_frame_count,
                 apply_player_input,
                 update_player_facing,
                 update_target_horizontal_velocity,
@@ -62,6 +71,12 @@ fn main() {
                 .chain(),
         )
         .run();
+}
+
+fn update_frame_count(mut query: Query<&mut FrameCount>) {
+    for mut frame_count in &mut query {
+        frame_count.0 += 1;
+    }
 }
 
 fn apply_player_input(
@@ -288,11 +303,11 @@ impl Direction {
     }
 }
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Clone, Copy)]
 struct Facing(Direction);
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-enum PlayerState {
+enum BasicState {
     #[default]
     Idle,
     Turnaround,
@@ -308,7 +323,7 @@ enum PlayerState {
     Airdodge,
 }
 
-impl PlayerState {
+impl BasicState {
     fn is_grounded(&self) -> bool {
         match self {
             Self::Idle => true,
@@ -332,33 +347,98 @@ impl PlayerState {
     }
 }
 
+enum Button2 {
+    Attack,
+    Special,
+    Shield,
+    Grab,
+}
+
+enum CircularDirection {
+    Clockwise,
+    CounterClockwise,
+}
+
+enum DirectionInput {
+    Tilt(Vec2),
+    Smash(Vec2),
+    HalfCircle(Vec2, CircularDirection),
+}
+
+struct PlayerInput2(HashSet<Button2>, DirectionInput);
+
+enum InputBufferResult {
+    Accept,
+    Reject,
+}
+
+enum SideEffect<S> {
+    StateChange(S),
+    AddVelocity(Vec2),
+    SetFacing(Direction),
+}
+
+type SideEffects<S> = Vec<SideEffect<S>>;
+
+trait PlayerState: Sized + Debug {
+    // Effects of being in a given state
+    fn get_side_effects(&self) -> SideEffects<Self>;
+    // Events
+    fn apply_input(&self, input: &PlayerInput2) -> Option<SideEffects<Self>>;
+    fn land(&self) -> SideEffects<Self>;
+    // Default states
+    fn get_default_airborne() -> Self;
+    // Hierarchical logic
+    fn get_super_state(&self) -> Option<Self> {
+        None
+    }
+}
+
+impl PlayerState for (BasicState, FrameNumber) {
+    fn get_side_effects(&self) -> SideEffects<Self> {
+        todo!()
+    }
+
+    fn apply_input(&self, input: &PlayerInput2) -> Option<SideEffects<Self>> {
+        todo!()
+    }
+
+    fn land(&self) -> SideEffects<Self> {
+        todo!()
+    }
+
+    fn get_default_airborne() -> Self {
+        todo!()
+    }
+}
+
 #[derive(Component, Default)]
 struct PlayerStateMachine {
-    state: PlayerState,
+    state: BasicState,
     facing: Direction,
-    frame_count: u16,
+    frame_count: FrameNumber,
 }
 
 impl PlayerStateMachine {
-    const LANDING_LAG: u16 = 12;
-    const IDLE_CYCLE: u16 = 240;
-    const JUMPSQUAT: u16 = 5;
+    const LANDING_LAG: FrameNumber = 12;
+    const IDLE_CYCLE: FrameNumber = 240;
+    const JUMPSQUAT: FrameNumber = 5;
     const FRICTION: f32 = 0.3;
     const WALK_SPEED: f32 = 3.0;
     const DASH_SPEED: f32 = 5.0;
-    const DASH_DURATION: u16 = 20;
+    const DASH_DURATION: FrameNumber = 20;
     const AIRDODGE_INITIAL_SPEED: f32 = 10.0;
-    const AIRDODGE_DURATION_FRAMES: u16 = 30;
-    const AIRDODGE_INTANGIBLE_START: u16 = 4;
-    const AIRDODGE_INTANGIBLE_END: u16 = 20;
-    const TURNAROUND_DURATION_FRAMES: u16 = 14;
-    const TURNAROUND_THRESHOLD_FRAME: u16 = Self::TURNAROUND_DURATION_FRAMES / 2;
-    const RUN_TURNAROUND_DURATION_FRAMES: u16 = 14;
-    const RUN_TURNAROUND_THRESHOLD_FRAME: u16 = Self::TURNAROUND_DURATION_FRAMES / 2;
+    const AIRDODGE_DURATION_FRAMES: FrameNumber = 30;
+    const AIRDODGE_INTANGIBLE_START: FrameNumber = 4;
+    const AIRDODGE_INTANGIBLE_END: FrameNumber = 20;
+    const TURNAROUND_DURATION_FRAMES: FrameNumber = 14;
+    const TURNAROUND_THRESHOLD_FRAME: FrameNumber = Self::TURNAROUND_DURATION_FRAMES / 2;
+    const RUN_TURNAROUND_DURATION_FRAMES: FrameNumber = 14;
+    const RUN_TURNAROUND_THRESHOLD_FRAME: FrameNumber = Self::TURNAROUND_DURATION_FRAMES / 2;
 
     fn is_intangible(&self) -> bool {
         match self.state {
-            PlayerState::Airdodge => {
+            BasicState::Airdodge => {
                 Self::AIRDODGE_INTANGIBLE_START <= self.frame_count
                     && self.frame_count <= Self::AIRDODGE_INTANGIBLE_END
             }
@@ -366,7 +446,7 @@ impl PlayerStateMachine {
         }
     }
 
-    fn set_new_state(&mut self, state: &PlayerState) {
+    fn set_new_state(&mut self, state: &BasicState) {
         info!("{:?} -> {:?}", self.state, state);
         self.state = *state;
         self.frame_count = 0;
@@ -376,31 +456,31 @@ impl PlayerStateMachine {
         self.frame_count += 1;
         debug!("{:?}", (self.state, self.frame_count));
         match (self.state, self.frame_count) {
-            (PlayerState::LandCrouch, Self::LANDING_LAG) => self.set_new_state(&PlayerState::Idle),
+            (BasicState::LandCrouch, Self::LANDING_LAG) => self.set_new_state(&BasicState::Idle),
             // Blinky blinky
-            (PlayerState::Idle, Self::IDLE_CYCLE) => {
+            (BasicState::Idle, Self::IDLE_CYCLE) => {
                 self.frame_count = 0;
             }
-            (PlayerState::Turnaround, Self::TURNAROUND_DURATION_FRAMES) => {
-                self.set_new_state(&PlayerState::Idle);
+            (BasicState::Turnaround, Self::TURNAROUND_DURATION_FRAMES) => {
+                self.set_new_state(&BasicState::Idle);
             }
-            (PlayerState::Turnaround, Self::TURNAROUND_THRESHOLD_FRAME) => {
+            (BasicState::Turnaround, Self::TURNAROUND_THRESHOLD_FRAME) => {
                 self.facing = self.facing.flip();
             }
-            (PlayerState::RunTurnaround, Self::RUN_TURNAROUND_DURATION_FRAMES) => {
-                self.set_new_state(&PlayerState::Run);
+            (BasicState::RunTurnaround, Self::RUN_TURNAROUND_DURATION_FRAMES) => {
+                self.set_new_state(&BasicState::Run);
             }
-            (PlayerState::RunTurnaround, Self::RUN_TURNAROUND_THRESHOLD_FRAME) => {
+            (BasicState::RunTurnaround, Self::RUN_TURNAROUND_THRESHOLD_FRAME) => {
                 self.facing = self.facing.flip();
             }
-            (PlayerState::Airdodge, Self::AIRDODGE_DURATION_FRAMES) => {
-                self.set_new_state(&PlayerState::IdleAirborne);
+            (BasicState::Airdodge, Self::AIRDODGE_DURATION_FRAMES) => {
+                self.set_new_state(&BasicState::IdleAirborne);
             }
-            (PlayerState::Dash, Self::DASH_DURATION) => {
-                self.set_new_state(&PlayerState::Run);
+            (BasicState::Dash, Self::DASH_DURATION) => {
+                self.set_new_state(&BasicState::Run);
             }
-            (PlayerState::RunEnd, 2) => {
-                self.set_new_state(&PlayerState::Idle);
+            (BasicState::RunEnd, 2) => {
+                self.set_new_state(&BasicState::Idle);
             }
             _ => {}
         }
@@ -408,11 +488,11 @@ impl PlayerStateMachine {
 
     fn update_physics(&self, velocity: &mut Velocity, input: &PlayerInput) {
         match (self.state, self.frame_count) {
-            (PlayerState::JumpSquat, Self::JUMPSQUAT) => {
+            (BasicState::JumpSquat, Self::JUMPSQUAT) => {
                 velocity.0.y += 10.0;
                 // pos.0 += Vec2::new(0.0, 1.0);
             }
-            (PlayerState::Airdodge, 0) => {
+            (BasicState::Airdodge, 0) => {
                 let control = if input.control.length() > CONTROL_STICK_DEADZONE {
                     input.control.normalize_or_zero()
                 } else {
@@ -420,7 +500,7 @@ impl PlayerStateMachine {
                 };
                 velocity.0 = control * Self::AIRDODGE_INITIAL_SPEED;
             }
-            (PlayerState::Airdodge, _) => {
+            (BasicState::Airdodge, _) => {
                 let speed_reduction_per_frame =
                     Self::AIRDODGE_INITIAL_SPEED / (Self::AIRDODGE_DURATION_FRAMES as f32);
                 let current_speed = velocity.0.length();
@@ -431,7 +511,7 @@ impl PlayerStateMachine {
                 let ratio = desired_speed / current_speed;
                 velocity.0 *= ratio;
             }
-            (PlayerState::Dash, 0) => {
+            (BasicState::Dash, 0) => {
                 velocity.0.x = if input.control.x.is_sign_negative() {
                     -Self::DASH_SPEED
                 } else {
@@ -447,11 +527,11 @@ impl PlayerStateMachine {
         let modified_pushback = normal * (normal.dot(*pushback));
         velocity.0 += modified_pushback;
         match self.state {
-            PlayerState::IdleAirborne => {
-                self.set_new_state(&PlayerState::LandCrouch);
+            BasicState::IdleAirborne => {
+                self.set_new_state(&BasicState::LandCrouch);
             }
-            PlayerState::Airdodge => {
-                self.set_new_state(&PlayerState::LandCrouch);
+            BasicState::Airdodge => {
+                self.set_new_state(&BasicState::LandCrouch);
             }
             _ => {}
         }
@@ -461,34 +541,34 @@ impl PlayerStateMachine {
         if !self.state.is_grounded() {
             return;
         }
-        self.set_new_state(&PlayerState::IdleAirborne);
+        self.set_new_state(&BasicState::IdleAirborne);
     }
 
     fn apply_input(&mut self, input: &PlayerInput) -> BufferResult {
         let button = input.buffered_action.map(|x| x.action);
         match (self.state, button, input.dash) {
-            (PlayerState::Idle, _, Some(direction))
-            | (PlayerState::Turnaround, _, Some(direction)) => {
+            (BasicState::Idle, _, Some(direction))
+            | (BasicState::Turnaround, _, Some(direction)) => {
                 self.facing = direction;
-                self.set_new_state(&PlayerState::Dash);
+                self.set_new_state(&BasicState::Dash);
                 BufferResult::Rejected
             }
-            (PlayerState::Dash, _, Some(direction)) => {
+            (BasicState::Dash, _, Some(direction)) => {
                 if direction != self.facing {
                     self.facing = direction;
-                    self.set_new_state(&PlayerState::Dash);
+                    self.set_new_state(&BasicState::Dash);
                 }
                 BufferResult::Rejected
             }
-            (PlayerState::Idle, Some(PlayerButton::Jump), _)
-            | (PlayerState::Dash, Some(PlayerButton::Jump), _)
-            | (PlayerState::Run, Some(PlayerButton::Jump), _)
-            | (PlayerState::Walk, Some(PlayerButton::Jump), _)
-            | (PlayerState::Turnaround, Some(PlayerButton::Jump), _) => {
-                self.set_new_state(&PlayerState::JumpSquat);
+            (BasicState::Idle, Some(PlayerButton::Jump), _)
+            | (BasicState::Dash, Some(PlayerButton::Jump), _)
+            | (BasicState::Run, Some(PlayerButton::Jump), _)
+            | (BasicState::Walk, Some(PlayerButton::Jump), _)
+            | (BasicState::Turnaround, Some(PlayerButton::Jump), _) => {
+                self.set_new_state(&BasicState::JumpSquat);
                 BufferResult::Accepted
             }
-            (PlayerState::Idle, None, _) => {
+            (BasicState::Idle, None, _) => {
                 let control_x = input.control.x;
                 if control_x.abs() < HORIZONTAL_DEADZONE {
                     return BufferResult::Rejected;
@@ -499,17 +579,17 @@ impl PlayerStateMachine {
                     Direction::Right
                 };
                 if control_direction != self.facing {
-                    self.set_new_state(&PlayerState::Turnaround);
+                    self.set_new_state(&BasicState::Turnaround);
                     BufferResult::Rejected
                 } else {
-                    self.set_new_state(&PlayerState::Walk);
+                    self.set_new_state(&BasicState::Walk);
                     BufferResult::Rejected
                 }
             }
-            (PlayerState::Run, None, _) => {
+            (BasicState::Run, None, _) => {
                 let control_x = input.control.x;
                 if control_x.abs() < HORIZONTAL_DEADZONE {
-                    self.set_new_state(&PlayerState::RunEnd);
+                    self.set_new_state(&BasicState::RunEnd);
                     return BufferResult::Rejected;
                 }
                 let control_direction = if control_x < 0.0 {
@@ -518,11 +598,11 @@ impl PlayerStateMachine {
                     Direction::Right
                 };
                 if control_direction != self.facing {
-                    self.set_new_state(&PlayerState::RunTurnaround);
+                    self.set_new_state(&BasicState::RunTurnaround);
                 }
                 BufferResult::Rejected
             }
-            (PlayerState::RunEnd, None, _) => {
+            (BasicState::RunEnd, None, _) => {
                 let control_x = input.control.x;
                 if control_x.abs() < HORIZONTAL_DEADZONE {
                     return BufferResult::Rejected;
@@ -533,20 +613,20 @@ impl PlayerStateMachine {
                     Direction::Right
                 };
                 if control_direction != self.facing {
-                    self.set_new_state(&PlayerState::RunTurnaround);
+                    self.set_new_state(&BasicState::RunTurnaround);
                 }
                 BufferResult::Rejected
             }
-            (PlayerState::Walk, _, Some(direction)) => {
+            (BasicState::Walk, _, Some(direction)) => {
                 if self.facing == direction {
-                    self.set_new_state(&PlayerState::Dash);
+                    self.set_new_state(&BasicState::Dash);
                 }
                 BufferResult::Rejected
             }
-            (PlayerState::Walk, None, _) => {
+            (BasicState::Walk, None, _) => {
                 let control_x = input.control.x;
                 if control_x.abs() < HORIZONTAL_DEADZONE {
-                    self.set_new_state(&PlayerState::Idle);
+                    self.set_new_state(&BasicState::Idle);
                     return BufferResult::Rejected;
                 }
                 let control_direction = if control_x < 0.0 {
@@ -555,13 +635,13 @@ impl PlayerStateMachine {
                     Direction::Right
                 };
                 if control_direction != self.facing {
-                    self.set_new_state(&PlayerState::Turnaround);
+                    self.set_new_state(&BasicState::Turnaround);
                 }
                 BufferResult::Rejected
             }
-            (PlayerState::IdleAirborne, Some(PlayerButton::Shield), _)
-            | (PlayerState::JumpSquat, Some(PlayerButton::Shield), _) => {
-                self.set_new_state(&PlayerState::Airdodge);
+            (BasicState::IdleAirborne, Some(PlayerButton::Shield), _)
+            | (BasicState::JumpSquat, Some(PlayerButton::Shield), _) => {
+                self.set_new_state(&BasicState::Airdodge);
                 BufferResult::Accepted
             }
             _ => BufferResult::Rejected,
@@ -571,14 +651,14 @@ impl PlayerStateMachine {
     // Empty if no new data is to be given
     fn get_animation_data(&self, velocity: &Velocity) -> AnimationUpdate {
         match (self.state, self.frame_count) {
-            (PlayerState::Idle, 200) => AnimationUpdate::MultiFrame {
+            (BasicState::Idle, 200) => AnimationUpdate::MultiFrame {
                 first: 0,
                 last: 2,
                 seconds_per_frame: 0.1,
             },
-            (PlayerState::Idle, 0) => AnimationUpdate::SingleFrame(0),
-            (PlayerState::Turnaround, 0) => AnimationUpdate::SingleFrame(74),
-            (PlayerState::IdleAirborne, _) => {
+            (BasicState::Idle, 0) => AnimationUpdate::SingleFrame(0),
+            (BasicState::Turnaround, 0) => AnimationUpdate::SingleFrame(74),
+            (BasicState::IdleAirborne, _) => {
                 let y = velocity.0.y;
                 if y > 1.5 {
                     AnimationUpdate::SingleFrame(18)
@@ -592,17 +672,17 @@ impl PlayerStateMachine {
                     }
                 }
             }
-            (PlayerState::LandCrouch, 0) => AnimationUpdate::SingleFrame(133),
-            (PlayerState::JumpSquat, 0) => AnimationUpdate::SingleFrame(133),
-            (PlayerState::Walk, 0) => AnimationUpdate::MultiFrame {
+            (BasicState::LandCrouch, 0) => AnimationUpdate::SingleFrame(133),
+            (BasicState::JumpSquat, 0) => AnimationUpdate::SingleFrame(133),
+            (BasicState::Walk, 0) => AnimationUpdate::MultiFrame {
                 first: 5,
                 last: 14,
                 seconds_per_frame: 0.1,
             },
-            (PlayerState::Airdodge, 0) => AnimationUpdate::SingleFrame(33),
-            (PlayerState::Dash, 0) => AnimationUpdate::SingleFrame(24),
-            (PlayerState::RunTurnaround, 0) => AnimationUpdate::SingleFrame(30),
-            (PlayerState::Run, 0) => AnimationUpdate::MultiFrame {
+            (BasicState::Airdodge, 0) => AnimationUpdate::SingleFrame(33),
+            (BasicState::Dash, 0) => AnimationUpdate::SingleFrame(24),
+            (BasicState::RunTurnaround, 0) => AnimationUpdate::SingleFrame(30),
+            (BasicState::Run, 0) => AnimationUpdate::MultiFrame {
                 first: 5,
                 last: 14,
                 seconds_per_frame: 0.1,
@@ -774,14 +854,14 @@ fn update_target_horizontal_velocity(
     mut query: Query<(&PlayerStateMachine, &mut TargetHorizontalVelocity)>,
 ) {
     for (psm, mut v) in &mut query {
-        if psm.state == PlayerState::JumpSquat {
+        if psm.state == BasicState::JumpSquat {
             // Don't touch during jumpsquat
             continue;
         }
         v.0 = match psm.state {
-            PlayerState::Walk => PlayerStateMachine::WALK_SPEED,
-            PlayerState::Dash => PlayerStateMachine::DASH_SPEED,
-            PlayerState::Run => PlayerStateMachine::DASH_SPEED,
+            BasicState::Walk => PlayerStateMachine::WALK_SPEED,
+            BasicState::Dash => PlayerStateMachine::DASH_SPEED,
+            BasicState::Run => PlayerStateMachine::DASH_SPEED,
             _ => 0.0,
         } * match psm.facing {
             Direction::Left => -1.0,
@@ -823,7 +903,7 @@ fn add_friction_component(
     mut commands: Commands,
 ) {
     for (id, psm) in query.iter() {
-        if psm.state.is_grounded() && psm.state != PlayerState::Dash {
+        if psm.state.is_grounded() && psm.state != BasicState::Dash {
             commands
                 .get_entity(id)
                 .expect("Player entity id should exist")
@@ -837,7 +917,7 @@ fn remove_friction_component(
     mut commands: Commands,
 ) {
     for (id, psm) in query.iter() {
-        if !psm.state.is_grounded() || psm.state == PlayerState::Dash {
+        if !psm.state.is_grounded() || psm.state == BasicState::Dash {
             commands
                 .get_entity(id)
                 .expect("Player entity id should exist")
@@ -900,7 +980,7 @@ fn displace_and_return_pushback<'a>(
     return pushback;
 }
 
-const INTANGIBLE_FLASH_PERIOD: u16 = 4;
+const INTANGIBLE_FLASH_PERIOD: FrameNumber = 4;
 
 fn update_intangible_flash(mut query: Query<(&mut Sprite, &PlayerStateMachine), With<Intangible>>) {
     for (mut sprite, psm) in &mut query {
