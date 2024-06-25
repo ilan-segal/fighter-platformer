@@ -1,7 +1,6 @@
 use bevy::{
-    ecs::system::Command,
+    app::{FixedUpdate, Plugin},
     prelude::{Component, Entity, Event, EventReader, EventWriter, Query, Vec2, Without},
-    transform::commands,
 };
 pub const MAX_FLOOR_SLOPE: f32 = 0.1;
 
@@ -14,10 +13,7 @@ pub struct Velocity(pub Vec2);
 #[derive(Event)]
 pub struct AddVelocity(pub Entity, pub Vec2);
 
-pub fn add_velocity(
-    mut ev_add_velocity: EventReader<AddVelocity>,
-    mut query: Query<&mut Velocity>,
-) {
+fn add_velocity(mut ev_add_velocity: EventReader<AddVelocity>, mut query: Query<&mut Velocity>) {
     for event in ev_add_velocity.read() {
         if let Ok(mut v) = query.get_mut(event.0) {
             v.0 += event.1;
@@ -28,10 +24,7 @@ pub fn add_velocity(
 #[derive(Event)]
 pub struct SetVelocity(pub Entity, pub Vec2);
 
-pub fn set_velocity(
-    mut ev_add_velocity: EventReader<SetVelocity>,
-    mut query: Query<&mut Velocity>,
-) {
+fn set_velocity(mut ev_add_velocity: EventReader<SetVelocity>, mut query: Query<&mut Velocity>) {
     for event in ev_add_velocity.read() {
         if let Ok(mut v) = query.get_mut(event.0) {
             v.0 = event.1;
@@ -40,18 +33,18 @@ pub fn set_velocity(
 }
 
 #[derive(Component)]
-pub struct Gravity(f32);
+pub struct Gravity(pub f32);
 
-pub fn accelerate_from_gravity(mut query: Query<(&mut Velocity, &Gravity)>) {
+fn accelerate_from_gravity(mut query: Query<(&mut Velocity, &Gravity)>) {
     for (mut v, g) in &mut query {
-        v.0.y -= g.0;
+        v.0.y += g.0;
     }
 }
 
 #[derive(Component)]
 pub struct Collider {
-    normal: Vec2,
-    breadth: f32,
+    pub normal: Vec2,
+    pub breadth: f32,
 }
 
 impl Collider {
@@ -79,10 +72,10 @@ impl Collider {
 #[derive(Event)]
 pub struct Collision {
     pub entity: Entity,
-    pub slope: f32,
+    pub normal: Vec2,
 }
 
-pub fn apply_velocity(
+fn apply_velocity(
     mut objects: Query<(Entity, &mut Position, &mut Velocity)>,
     colliders: Query<(&Collider, &Position), Without<Velocity>>,
     mut ev_collision: EventWriter<Collision>,
@@ -95,12 +88,14 @@ pub fn apply_velocity(
         let normal = pushback.normalize();
         let modified_pushback = normal * normal.dot(pushback);
         v.0 += modified_pushback;
-        let slope = (pushback.x / pushback.y).abs();
-        ev_collision.send(Collision { entity, slope });
+        ev_collision.send(Collision {
+            entity,
+            normal: pushback,
+        });
     }
 }
 
-pub fn displace_and_return_pushback<'a>(
+fn displace_and_return_pushback<'a>(
     position: &mut Position,
     displacement: &Vec2,
     colliders: impl Iterator<Item = (&'a Collider, &'a Position)>,
@@ -115,4 +110,22 @@ pub fn displace_and_return_pushback<'a>(
         .unwrap_or_default();
     position.0 += *displacement + pushback;
     return pushback;
+}
+
+pub struct PhysicsPlugin;
+impl Plugin for PhysicsPlugin {
+    fn build(&self, app: &mut bevy::prelude::App) {
+        app.add_systems(
+            FixedUpdate,
+            (
+                set_velocity,
+                add_velocity,
+                accelerate_from_gravity,
+                apply_velocity,
+            ),
+        )
+        .add_event::<AddVelocity>()
+        .add_event::<SetVelocity>()
+        .add_event::<Collision>();
+    }
 }

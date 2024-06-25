@@ -1,17 +1,15 @@
 use bevy::{
     app::{FixedUpdate, Plugin},
+    ecs::bundle::DynamicBundle,
     prelude::*,
 };
 use bevy_trait_query::One;
 
 use crate::{
     input::ControlStick,
-    physics::{
-        displace_and_return_pushback, AddVelocity, Collider, Collision, Position, SetVelocity,
-        Velocity, MAX_FLOOR_SLOPE,
-    },
+    physics::{AddVelocity, Collision, Gravity, Position, SetVelocity, Velocity, MAX_FLOOR_SLOPE},
     utils::{FrameCount, FrameNumber},
-    Facing,
+    AnimationIndices, AnimationTimer, Facing,
 };
 
 pub mod megaman;
@@ -24,6 +22,9 @@ const TURNAROUND_DURATION_FRAMES: FrameNumber = 14;
 const TURNAROUND_THRESHOLD_FRAME: FrameNumber = TURNAROUND_DURATION_FRAMES / 2;
 const RUN_TURNAROUND_DURATION_FRAMES: FrameNumber = 14;
 const RUN_TURNAROUND_THRESHOLD_FRAME: FrameNumber = TURNAROUND_DURATION_FRAMES / 2;
+
+#[derive(Component)]
+pub struct Player(pub usize);
 
 #[derive(Component, Clone, Copy, Default)]
 pub enum FighterState {
@@ -95,7 +96,7 @@ pub trait FighterStateMachine {
 #[derive(Event)]
 pub struct FighterStateUpdate(Entity, FighterState);
 
-pub fn update_fighter_state(mut updates: EventReader<FighterStateUpdate>, mut commands: Commands) {
+fn update_fighter_state(mut updates: EventReader<FighterStateUpdate>, mut commands: Commands) {
     for update in updates.read() {
         commands
             .entity(update.0)
@@ -104,7 +105,7 @@ pub fn update_fighter_state(mut updates: EventReader<FighterStateUpdate>, mut co
     }
 }
 
-pub fn compute_common_side_effects(
+fn compute_common_side_effects(
     query: Query<(
         Entity,
         &FighterState,
@@ -185,7 +186,7 @@ pub fn compute_common_side_effects(
     }
 }
 
-pub fn land(
+fn land(
     q: Query<(&FighterState, &Velocity)>,
     mut ev_collision: EventReader<Collision>,
     mut ev_state: EventWriter<FighterStateUpdate>,
@@ -205,7 +206,7 @@ pub fn land(
     }
 }
 
-pub fn go_airborne(
+fn go_airborne(
     q: Query<(Entity, &FighterState, &Velocity)>,
     mut ev_state: EventWriter<FighterStateUpdate>,
 ) {
@@ -222,7 +223,7 @@ pub struct Intangible;
 #[derive(Event)]
 pub struct IntangibleUpdate(Entity, bool);
 
-pub fn remove_intangible(
+fn remove_intangible(
     mut commands: Commands,
     query: Query<(Entity, &FighterState, &FrameCount), With<Intangible>>,
 ) {
@@ -235,7 +236,7 @@ pub fn remove_intangible(
     }
 }
 
-pub fn add_intangible(
+fn add_intangible(
     mut commands: Commands,
     query: Query<(Entity, &FighterState, &FrameCount), Without<Intangible>>,
 ) {
@@ -251,7 +252,7 @@ pub fn add_intangible(
 #[derive(Event, Clone, Copy)]
 pub struct FacingUpdate(Entity, Facing);
 
-pub fn update_facing(mut updates: EventReader<FacingUpdate>, mut commands: Commands) {
+fn update_facing(mut updates: EventReader<FacingUpdate>, mut commands: Commands) {
     for update in updates.read() {
         commands
             .entity(update.0)
@@ -259,7 +260,7 @@ pub fn update_facing(mut updates: EventReader<FacingUpdate>, mut commands: Comma
     }
 }
 
-struct FighterPlugin;
+pub struct FighterPlugin;
 impl Plugin for FighterPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.add_plugins(megaman::MegaManPlugin)
@@ -275,6 +276,22 @@ impl Plugin for FighterPlugin {
                     compute_common_side_effects,
                 )
                     .chain(),
-            );
+            )
+            .add_event::<FighterStateUpdate>()
+            .add_event::<IntangibleUpdate>()
+            .add_event::<FacingUpdate>();
     }
+}
+
+#[derive(Bundle)]
+pub struct FighterBundle {
+    pub tag: Player,
+    pub facing: Facing,
+    pub position: Position,
+    pub velocity: Velocity,
+    pub gravity: Gravity,
+    pub state: FighterState,
+    pub sprite_sheet_bundle: SpriteSheetBundle,
+    pub animation_indices: AnimationIndices,
+    pub animation_timer: AnimationTimer,
 }
