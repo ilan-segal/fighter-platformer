@@ -1,6 +1,5 @@
 use bevy::{
     app::{FixedUpdate, Plugin},
-    ecs::bundle::DynamicBundle,
     prelude::*,
 };
 use bevy_trait_query::One;
@@ -9,7 +8,7 @@ use crate::{
     input::ControlStick,
     physics::{AddVelocity, Collision, Gravity, Position, SetVelocity, Velocity, MAX_FLOOR_SLOPE},
     utils::{FrameCount, FrameNumber},
-    AnimationIndices, AnimationTimer, Facing,
+    Airborne, AnimationIndices, AnimationTimer, Facing,
 };
 
 pub mod megaman;
@@ -26,7 +25,7 @@ const RUN_TURNAROUND_THRESHOLD_FRAME: FrameNumber = TURNAROUND_DURATION_FRAMES /
 #[derive(Component)]
 pub struct Player(pub usize);
 
-#[derive(Component, Clone, Copy, Default)]
+#[derive(Component, Clone, Copy, Default, Debug)]
 pub enum FighterState {
     #[default]
     Idle,
@@ -96,12 +95,26 @@ pub trait FighterStateMachine {
 #[derive(Event)]
 pub struct FighterStateUpdate(Entity, FighterState);
 
-fn update_fighter_state(mut updates: EventReader<FighterStateUpdate>, mut commands: Commands) {
+fn update_fighter_state(
+    mut updates: EventReader<FighterStateUpdate>,
+    mut q: Query<(&mut FighterState, &mut FrameCount)>,
+) {
     for update in updates.read() {
-        commands
-            .entity(update.0)
-            .insert(update.1)
-            .insert(FrameCount(0));
+        let entity = update.0;
+        if let Ok((mut state, mut frame_count)) = q.get_mut(entity) {
+            let new_state = update.1;
+            log::info!(
+                "{:?} {:?}({:?}) -> {:?}",
+                entity,
+                state.clone(),
+                frame_count.0,
+                new_state
+            );
+            *state = new_state;
+            frame_count.0 = 0;
+        } else {
+            log::warn!("No entity found {:?}", entity);
+        }
     }
 }
 
@@ -121,6 +134,7 @@ fn compute_common_side_effects(
     mut ev_set_velocity: EventWriter<SetVelocity>,
 ) {
     for (entity, state, frame, facing, sm, control_stick, v) in &query {
+        // log::info!("Getting side effects for {:?}", entity);
         // Implementation-specific stuff
         match state {
             FighterState::LandCrouch if frame.0 == sm.land_crouch_duration() => {
@@ -194,27 +208,31 @@ fn land(
     for collision in ev_collision.read() {
         let entity_id = collision.entity;
         if let Ok((state, velocity)) = q.get(entity_id) {
-            if velocity.0.y.is_sign_negative() {
-                match state {
-                    FighterState::Airdodge | FighterState::IdleAirborne => {
-                        ev_state.send(FighterStateUpdate(entity_id, FighterState::LandCrouch));
-                    }
-                    _ => {}
+            match state {
+                FighterState::Airdodge | FighterState::IdleAirborne => {
+                    ev_state.send(FighterStateUpdate(entity_id, FighterState::LandCrouch));
                 }
+                _ => {}
             }
         }
     }
 }
 
 fn go_airborne(
-    q: Query<(Entity, &FighterState, &Velocity)>,
+    q: Query<(Entity, &FighterState), With<Airborne>>,
     mut ev_state: EventWriter<FighterStateUpdate>,
 ) {
-    for (e, s, v) in &q {
-        if v.0.y != 0.0 && s.is_grounded() && (v.0.x / v.0.y).abs() > MAX_FLOOR_SLOPE {
-            ev_state.send(FighterStateUpdate(e, FighterState::IdleAirborne));
-        }
-    }
+    q.iter()
+        .filter(|(_, s)| s.is_grounded())
+        .map(|(e, _)| FighterStateUpdate(e, FighterState::IdleAirborne))
+        .for_each(|x| {
+            ev_state.send(x);
+        });
+    // for (e, s) in &q {
+    //     if s.is_grounded() {
+    //         ev_state.send(FighterStateUpdate(e, FighterState::IdleAirborne));
+    //     }
+    // }
 }
 
 #[derive(Component)]
@@ -275,7 +293,8 @@ impl Plugin for FighterPlugin {
                     update_fighter_state,
                     compute_common_side_effects,
                 )
-                    .chain(),
+                    .chain()
+                    .before(crate::update_frame_count),
             )
             .add_event::<FighterStateUpdate>()
             .add_event::<IntangibleUpdate>()
@@ -286,6 +305,7 @@ impl Plugin for FighterPlugin {
 #[derive(Bundle)]
 pub struct FighterBundle {
     pub tag: Player,
+    pub frame: FrameCount,
     pub facing: Facing,
     pub position: Position,
     pub velocity: Velocity,
@@ -294,4 +314,5 @@ pub struct FighterBundle {
     pub sprite_sheet_bundle: SpriteSheetBundle,
     pub animation_indices: AnimationIndices,
     pub animation_timer: AnimationTimer,
+    pub control_stick: ControlStick,
 }

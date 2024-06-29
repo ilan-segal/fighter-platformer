@@ -1,6 +1,6 @@
 use bevy::{
     app::{FixedUpdate, Plugin},
-    prelude::{Component, Entity, Event, EventReader, EventWriter, Query, Vec2, Without},
+    prelude::{Commands, Component, Entity, Event, EventReader, EventWriter, Query, Vec2, Without},
 };
 pub const MAX_FLOOR_SLOPE: f32 = 0.1;
 
@@ -75,23 +75,30 @@ pub struct Collision {
     pub normal: Vec2,
 }
 
+#[derive(Component)]
+pub struct Airborne;
+
 fn apply_velocity(
     mut objects: Query<(Entity, &mut Position, &mut Velocity)>,
     colliders: Query<(&Collider, &Position), Without<Velocity>>,
     mut ev_collision: EventWriter<Collision>,
+    mut commands: Commands,
 ) {
     for (entity, mut p, mut v) in &mut objects {
         let pushback = displace_and_return_pushback(&mut p, &v.0, colliders.iter());
         if (pushback.length()) == 0.0 {
+            if let Some(mut e) = commands.get_entity(entity) {
+                e.insert(Airborne);
+            }
             continue;
         }
         let normal = pushback.normalize();
         let modified_pushback = normal * normal.dot(pushback);
         v.0 += modified_pushback;
-        ev_collision.send(Collision {
-            entity,
-            normal: pushback,
-        });
+        ev_collision.send(Collision { entity, normal });
+        if let Some(mut e) = commands.get_entity(entity) {
+            e.remove::<Airborne>();
+        }
     }
 }
 

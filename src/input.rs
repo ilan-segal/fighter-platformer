@@ -13,7 +13,7 @@ pub enum Button {
     Grab,
 }
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct ControlStick(pub Vec2);
 
 fn read_input_events(

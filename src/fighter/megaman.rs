@@ -3,12 +3,13 @@ use super::{
 };
 use bevy::{
     app::{FixedUpdate, Plugin},
-    prelude::{Component, Entity, EventWriter, Query, With},
+    prelude::{Component, Entity, EventWriter, IntoSystemConfigs, Query, With},
 };
 
 use crate::{
+    fighter,
     utils::{FrameCount, FrameNumber},
-    Facing,
+    AnimationIndices, AnimationUpdate, AnimationUpdateEvent, Facing,
 };
 
 const LANDING_LAG: FrameNumber = 12;
@@ -48,12 +49,35 @@ impl FighterStateMachine for MegaMan {
     }
 }
 
-pub fn compute_side_effects(
-    query: Query<(Entity, &FighterState, &FrameCount, &Facing), With<MegaMan>>,
-    mut ev_state: EventWriter<FighterStateUpdate>,
-    mut ev_facing: EventWriter<FacingUpdate>,
+// pub fn compute_side_effects(
+//     query: Query<(Entity, &FighterState, &FrameCount, &Facing), With<MegaMan>>,
+//     mut ev_state: EventWriter<FighterStateUpdate>,
+//     mut ev_facing: EventWriter<FacingUpdate>,
+// ) {
+//     for (entity, state, frame, facing) in query.iter() {}
+// }
+
+fn emit_animation_update(
+    q: Query<(Entity, &FighterState, &FrameCount), With<MegaMan>>,
+    mut ev_animation: EventWriter<AnimationUpdateEvent>,
 ) {
-    for (entity, state, frame, facing) in query.iter() {}
+    for (e, state, frame) in &q {
+        if let Some(update) = match (state, frame.0) {
+            (FighterState::Idle, 0) => Some(AnimationUpdate::SingleFrame(0)),
+            // Blinky blinky
+            (FighterState::Idle, 200) => Some(AnimationUpdate::MultiFrame {
+                indices: AnimationIndices { first: 0, last: 2 },
+                seconds_per_frame: 0.1,
+            }),
+            (FighterState::LandCrouch, 0) => Some(AnimationUpdate::SingleFrame(133)),
+
+            _ => None,
+        } {
+            let event = AnimationUpdateEvent(e, update);
+            log::info!("{:?}", event);
+            ev_animation.send(event);
+        }
+    }
 }
 
 pub struct MegaManPlugin;
@@ -62,6 +86,12 @@ impl Plugin for MegaManPlugin {
         use bevy_trait_query::RegisterExt;
 
         app.register_component_as::<dyn FighterStateMachine, MegaMan>()
-            .add_systems(FixedUpdate, compute_side_effects);
+            .add_systems(
+                FixedUpdate,
+                emit_animation_update
+                    .after(fighter::update_fighter_state)
+                    .before(crate::update_frame_count)
+                    .before(crate::view::update_animation_data),
+            );
     }
 }

@@ -1,19 +1,21 @@
 use bevy::{
     app::{Plugin, Update},
     prelude::{
-        Component, Deref, DerefMut, Entity, Event, EventReader, Query, Res, Sprite, TextureAtlas,
-        Time, Timer, TimerMode, Transform,
+        Component, Deref, DerefMut, Entity, Event, EventReader, IntoSystemConfigs, Query, Res,
+        Sprite, TextureAtlas, Time, Timer, TimerMode, Transform,
     },
 };
 
 use crate::physics::Position;
 use crate::utils::{Facing, FrameNumber, LeftRight};
 
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Debug)]
 pub struct AnimationIndices {
     pub first: FrameNumber,
     pub last: FrameNumber,
 }
+
+#[derive(Debug)]
 pub enum AnimationUpdate {
     SingleFrame(FrameNumber),
     MultiFrame {
@@ -22,7 +24,7 @@ pub enum AnimationUpdate {
     },
 }
 
-#[derive(Event)]
+#[derive(Event, Debug)]
 pub struct AnimationUpdateEvent(pub Entity, pub AnimationUpdate);
 
 #[derive(Component, Deref, DerefMut)]
@@ -44,7 +46,7 @@ fn animate_sprite(
     }
 }
 
-fn update_animation_data(
+pub fn update_animation_data(
     mut ev_update: EventReader<AnimationUpdateEvent>,
     mut q: Query<(
         &mut AnimationIndices,
@@ -55,6 +57,7 @@ fn update_animation_data(
     for event in ev_update.read() {
         let id = event.0;
         let Ok((mut idx, mut timer, mut atlas)) = q.get_mut(id) else {
+            log::warn!("No valid entity {:?}", id);
             continue;
         };
         match &event.1 {
@@ -101,7 +104,8 @@ impl Plugin for ViewPlugin {
                 update_animation_data,
                 snap_texture_to_position,
                 align_sprites_with_facing,
-            ),
+            )
+                .before(crate::update_frame_count),
         )
         .add_event::<AnimationUpdateEvent>();
     }

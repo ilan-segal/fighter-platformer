@@ -1,6 +1,7 @@
 // use std::collections::HashSet;
 
 use bevy::{prelude::*, sprite::Anchor};
+use input::ControlStick;
 use iyes_perf_ui::prelude::*;
 use log::info;
 
@@ -10,7 +11,7 @@ mod physics;
 mod utils;
 mod view;
 
-use fighter::{FighterBundle, Player as PlayerId};
+use fighter::{megaman::MegaMan, FighterBundle, Player as PlayerId};
 use physics::*;
 use utils::{Facing, FrameCount, FrameNumber, LeftRight};
 use view::*;
@@ -75,17 +76,22 @@ fn setup(
     // let state_machine = PlayerStateMachine::default();
 
     commands.spawn(Camera2dBundle::default());
-    commands.spawn(FighterBundle {
-        tag,
-        facing: Facing(LeftRight::Right),
-        position: Position::default(),
-        velocity: Velocity::default(),
-        gravity: Gravity(GRAVITY),
-        state: fighter::FighterState::default(),
-        sprite_sheet_bundle,
-        animation_indices,
-        animation_timer,
-    });
+    commands.spawn((
+        FighterBundle {
+            tag,
+            frame: FrameCount(0),
+            facing: Facing(LeftRight::Right),
+            position: Position::default(),
+            velocity: Velocity::default(),
+            gravity: Gravity(GRAVITY),
+            state: fighter::FighterState::default(),
+            sprite_sheet_bundle,
+            animation_indices,
+            animation_timer,
+            control_stick: ControlStick::default(),
+        },
+        MegaMan,
+    ));
     commands.spawn((
         SpriteBundle {
             transform: Transform {
