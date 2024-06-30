@@ -5,7 +5,7 @@ use crate::{
     input::ControlStick,
     physics::{AddVelocity, Collision, Gravity, Position, SetVelocity, Velocity},
     utils::{FrameCount, FrameNumber},
-    Airborne, AnimationIndices, AnimationTimer, Facing,
+    Airborne, AnimationIndices, AnimationTimer, AnimationUpdate, AnimationUpdateEvent, Facing,
 };
 
 pub mod megaman;
@@ -66,6 +66,7 @@ impl FighterState {
 
 #[bevy_trait_query::queryable]
 pub trait FighterStateMachine {
+    fn animation_update(&self, state: &FighterState) -> Option<AnimationUpdate>;
     fn dash_duration(&self) -> FrameNumber;
     fn dash_speed(&self) -> f32;
     fn land_crouch_duration(&self) -> FrameNumber;
@@ -111,6 +112,28 @@ fn update_fighter_state(
             frame_count.0 = 0;
         } else {
             log::warn!("No entity found {:?}", entity);
+        }
+    }
+}
+
+fn get_animation_from_state(
+    q: Query<(
+        Entity,
+        &FighterState,
+        One<&dyn FighterStateMachine>,
+        &FrameCount,
+    )>,
+    mut ev_animation: EventWriter<AnimationUpdateEvent>,
+) {
+    for (e, state, state_machine, frame) in &q {
+        if frame.0 != 1 {
+            continue;
+        }
+        if let Some(event) = state_machine
+            .animation_update(state)
+            .map(|update| AnimationUpdateEvent(e, update))
+        {
+            ev_animation.send(event);
         }
     }
 }
@@ -285,7 +308,8 @@ impl Plugin for FighterPlugin {
             .add_systems(
                 FixedUpdate,
                 (
-                    compute_common_side_effects.in_set(FighterEventSet::Emit),
+                    (get_animation_from_state, compute_common_side_effects)
+                        .in_set(FighterEventSet::Emit),
                     (
                         update_fighter_state,
                         update_facing,

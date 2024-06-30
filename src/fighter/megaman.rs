@@ -42,6 +42,27 @@ impl FighterStateMachine for MegaMan {
     fn jump_speed(&self) -> f32 {
         10.0
     }
+
+    fn animation_update(&self, state: &FighterState) -> Option<AnimationUpdate> {
+        match state {
+            FighterState::Idle => Some(AnimationUpdate::SingleFrame(0)),
+            FighterState::LandCrouch => Some(AnimationUpdate::SingleFrame(133)),
+            FighterState::JumpSquat => Some(AnimationUpdate::SingleFrame(133)),
+            FighterState::Walk => Some(AnimationUpdate::MultiFrame {
+                indices: AnimationIndices { first: 5, last: 14 },
+                seconds_per_frame: 0.1,
+            }),
+            FighterState::Airdodge => Some(AnimationUpdate::SingleFrame(33)),
+            FighterState::Dash => Some(AnimationUpdate::SingleFrame(24)),
+            FighterState::Turnaround => Some(AnimationUpdate::SingleFrame(74)),
+            FighterState::RunTurnaround => Some(AnimationUpdate::SingleFrame(30)),
+            FighterState::Run => Some(AnimationUpdate::MultiFrame {
+                indices: AnimationIndices { first: 5, last: 14 },
+                seconds_per_frame: 0.1,
+            }),
+            _ => None,
+        }
+    }
 }
 
 // pub fn compute_side_effects(
@@ -58,13 +79,11 @@ fn emit_animation_update(
 ) {
     for (e, state, frame, velocity) in &q {
         if let Some(update) = match (state, frame.0) {
-            (FighterState::Idle, 1) => Some(AnimationUpdate::SingleFrame(0)),
             // Blinky blinky
             (FighterState::Idle, 200) => Some(AnimationUpdate::MultiFrame {
                 indices: AnimationIndices { first: 0, last: 2 },
                 seconds_per_frame: 0.1,
             }),
-            (FighterState::LandCrouch, 1) => Some(AnimationUpdate::SingleFrame(133)),
             (FighterState::IdleAirborne, _) => {
                 let y = velocity.0.y;
                 if y > 1.5 {
@@ -81,19 +100,6 @@ fn emit_animation_update(
                     })
                 }
             }
-            (FighterState::JumpSquat, 1) => Some(AnimationUpdate::SingleFrame(133)),
-            (FighterState::Walk, 1) => Some(AnimationUpdate::MultiFrame {
-                indices: AnimationIndices { first: 5, last: 14 },
-                seconds_per_frame: 0.1,
-            }),
-            (FighterState::Airdodge, 1) => Some(AnimationUpdate::SingleFrame(33)),
-            (FighterState::Dash, 1) => Some(AnimationUpdate::SingleFrame(24)),
-            (FighterState::Turnaround, 1) => Some(AnimationUpdate::SingleFrame(74)),
-            (FighterState::RunTurnaround, 1) => Some(AnimationUpdate::SingleFrame(30)),
-            (FighterState::Run, 1) => Some(AnimationUpdate::MultiFrame {
-                indices: AnimationIndices { first: 5, last: 14 },
-                seconds_per_frame: 0.1,
-            }),
             _ => None,
         } {
             let event = AnimationUpdateEvent(e, update);
