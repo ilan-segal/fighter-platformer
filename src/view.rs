@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::physics::Position;
 use crate::utils::{Facing, FrameNumber, LeftRight};
 
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, PartialEq, Eq)]
 pub struct AnimationIndices {
     pub first: FrameNumber,
     pub last: FrameNumber,
@@ -68,7 +68,7 @@ pub fn update_animation_data(
             AnimationUpdate::MultiFrame {
                 indices,
                 seconds_per_frame,
-            } => {
+            } if *indices != *idx || timer.0.duration().as_secs_f32() != *seconds_per_frame => {
                 *idx = indices.clone();
                 *timer = AnimationTimer(Timer::from_seconds(
                     *seconds_per_frame,
@@ -76,6 +76,7 @@ pub fn update_animation_data(
                 ));
                 atlas.index = indices.first as usize;
             }
+            _ => {}
         }
     }
 }
