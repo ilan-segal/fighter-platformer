@@ -29,6 +29,11 @@ fn animate_sprite(
     mut query: Query<(&AnimationIndices, &mut AnimationTimer, &mut TextureAtlas)>,
 ) {
     for (indices, mut timer, mut atlas) in &mut query {
+        if atlas.index < indices.first {
+            atlas.index = indices.first;
+        } else if atlas.index > indices.last {
+            atlas.index = indices.last;
+        }
         timer.tick(time.delta());
         if timer.just_finished() {
             atlas.index = if atlas.index == indices.last as usize {
@@ -36,7 +41,6 @@ fn animate_sprite(
             } else {
                 atlas.index + 1
             };
-            log::info!("{:?}", atlas.index);
         }
     }
 }
@@ -98,16 +102,14 @@ impl Plugin for ViewPlugin {
         app.add_systems(
             FixedUpdate,
             (
-                (
-                    update_animation_data,
-                    snap_texture_to_position,
-                    align_sprites_with_facing,
-                ),
-                animate_sprite,
+                update_animation_data,
+                snap_texture_to_position,
+                align_sprites_with_facing,
             )
                 .chain()
                 .in_set(ViewSet),
         )
+        .add_systems(Update, animate_sprite)
         .add_event::<AnimationUpdateEvent>();
     }
 }
