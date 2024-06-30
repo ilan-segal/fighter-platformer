@@ -11,7 +11,7 @@ mod physics;
 mod utils;
 mod view;
 
-use fighter::{megaman::MegaMan, FighterBundle, Player as PlayerId};
+use fighter::{megaman::MegaMan, FighterBundle, FighterSet, Player as PlayerId};
 use physics::*;
 use utils::{Facing, FrameCount, FrameNumber, LeftRight};
 use view::*;
@@ -29,17 +29,25 @@ fn main() {
         .add_plugins(bevy::diagnostic::EntityCountDiagnosticsPlugin)
         .add_plugins(bevy::diagnostic::SystemInformationDiagnosticsPlugin)
         .add_plugins(PerfUiPlugin)
-        .add_plugins((input::InputPlugin, view::ViewPlugin, fighter::FighterPlugin, physics::PhysicsPlugin))
+        .add_plugins((
+            input::InputPlugin,
+            view::ViewPlugin,
+            fighter::FighterPlugin,
+            physics::PhysicsPlugin,
+        ))
         .insert_resource(Time::<Fixed>::from_hz(FRAMES_PER_SECOND as f64))
         .add_systems(Startup, setup)
-        .add_systems(
+        .add_systems(FixedUpdate, increment_frame_number)
+        .configure_sets(
             FixedUpdate,
-                update_frame_count,
+            (FighterSet, PhysicsSet, ViewSet)
+                .chain()
+                .before(increment_frame_number),
         )
         .run();
 }
 
-fn update_frame_count(mut query: Query<&mut FrameCount>) {
+fn increment_frame_number(mut query: Query<&mut FrameCount>) {
     for mut frame_count in &mut query {
         frame_count.0 += 1;
     }

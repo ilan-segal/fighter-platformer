@@ -1,10 +1,4 @@
-use bevy::{
-    app::{Plugin, Update},
-    prelude::{
-        Component, Deref, DerefMut, Entity, Event, EventReader, IntoSystemConfigs, Query, Res,
-        Sprite, TextureAtlas, Time, Timer, TimerMode, Transform,
-    },
-};
+use bevy::prelude::*;
 
 use crate::physics::Position;
 use crate::utils::{Facing, FrameNumber, LeftRight};
@@ -42,6 +36,7 @@ fn animate_sprite(
             } else {
                 atlas.index + 1
             };
+            log::info!("{:?}", atlas.index);
         }
     }
 }
@@ -94,18 +89,24 @@ fn align_sprites_with_facing(mut query: Query<(&Facing, &mut Sprite)>) {
     }
 }
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ViewSet;
+
 pub struct ViewPlugin;
 impl Plugin for ViewPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.add_systems(
-            Update,
+            FixedUpdate,
             (
+                (
+                    update_animation_data,
+                    snap_texture_to_position,
+                    align_sprites_with_facing,
+                ),
                 animate_sprite,
-                update_animation_data,
-                snap_texture_to_position,
-                align_sprites_with_facing,
             )
-                .before(crate::update_frame_count),
+                .chain()
+                .in_set(ViewSet),
         )
         .add_event::<AnimationUpdateEvent>();
     }

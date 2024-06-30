@@ -1,5 +1,6 @@
 use bevy::{
     app::{FixedUpdate, Plugin},
+    ecs::schedule::{IntoSystemConfigs, SystemSet},
     prelude::{Commands, Component, Entity, Event, EventReader, EventWriter, Query, Vec2, Without},
 };
 pub const MAX_FLOOR_SLOPE: f32 = 0.1;
@@ -119,6 +120,9 @@ fn displace_and_return_pushback<'a>(
     return pushback;
 }
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PhysicsSet;
+
 pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
@@ -129,7 +133,9 @@ impl Plugin for PhysicsPlugin {
                 add_velocity,
                 accelerate_from_gravity,
                 apply_velocity,
-            ),
+            )
+                .chain()
+                .in_set(PhysicsSet),
         )
         .add_event::<AddVelocity>()
         .add_event::<SetVelocity>()

@@ -1,7 +1,6 @@
 use bevy::{
-    app::{Plugin, Update},
     input::gamepad::{GamepadAxisChangedEvent, GamepadEvent},
-    prelude::{Component, Entity, Event, EventReader, GamepadAxisType, Query, Vec2},
+    prelude::*,
 };
 use enumset::{EnumSet, EnumSetType};
 
@@ -73,9 +72,12 @@ pub enum FighterAction {
 #[derive(Event)]
 pub struct FighterInput(Entity, FighterAction);
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct InputSet;
+
 pub struct InputPlugin;
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_systems(Update, read_input_events);
+        app.add_systems(FixedUpdate, read_input_events.in_set(InputSet));
     }
 }

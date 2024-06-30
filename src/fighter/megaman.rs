@@ -1,15 +1,10 @@
-use super::{
-    FacingUpdate, FighterState, FighterStateMachine, FighterStateUpdate, IntangibleUpdate,
-};
-use bevy::{
-    app::{FixedUpdate, Plugin},
-    prelude::{Component, Entity, EventWriter, IntoSystemConfigs, Query, With},
-};
+use super::{FighterState, FighterStateMachine};
+use bevy::prelude::*;
 
 use crate::{
-    fighter,
+    fighter::FighterEventSet,
     utils::{FrameCount, FrameNumber},
-    AnimationIndices, AnimationUpdate, AnimationUpdateEvent, Facing,
+    AnimationIndices, AnimationUpdate, AnimationUpdateEvent,
 };
 
 const LANDING_LAG: FrameNumber = 12;
@@ -63,14 +58,13 @@ fn emit_animation_update(
 ) {
     for (e, state, frame) in &q {
         if let Some(update) = match (state, frame.0) {
-            (FighterState::Idle, 0) => Some(AnimationUpdate::SingleFrame(0)),
+            (FighterState::Idle, 1) => Some(AnimationUpdate::SingleFrame(0)),
             // Blinky blinky
             (FighterState::Idle, 200) => Some(AnimationUpdate::MultiFrame {
                 indices: AnimationIndices { first: 0, last: 2 },
                 seconds_per_frame: 0.1,
             }),
-            (FighterState::LandCrouch, 0) => Some(AnimationUpdate::SingleFrame(133)),
-
+            (FighterState::LandCrouch, 1) => Some(AnimationUpdate::SingleFrame(133)),
             _ => None,
         } {
             let event = AnimationUpdateEvent(e, update);
@@ -88,10 +82,7 @@ impl Plugin for MegaManPlugin {
         app.register_component_as::<dyn FighterStateMachine, MegaMan>()
             .add_systems(
                 FixedUpdate,
-                emit_animation_update
-                    .after(fighter::update_fighter_state)
-                    .before(crate::update_frame_count)
-                    .before(crate::view::update_animation_data),
+                emit_animation_update.in_set(FighterEventSet::Emit),
             );
     }
 }

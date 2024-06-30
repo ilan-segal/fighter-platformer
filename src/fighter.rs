@@ -1,12 +1,9 @@
-use bevy::{
-    app::{FixedUpdate, Plugin},
-    prelude::*,
-};
+use bevy::prelude::*;
 use bevy_trait_query::One;
 
 use crate::{
     input::ControlStick,
-    physics::{AddVelocity, Collision, Gravity, Position, SetVelocity, Velocity, MAX_FLOOR_SLOPE},
+    physics::{AddVelocity, Collision, Gravity, Position, SetVelocity, Velocity},
     utils::{FrameCount, FrameNumber},
     Airborne, AnimationIndices, AnimationTimer, Facing,
 };
@@ -247,9 +244,7 @@ fn remove_intangible(
 ) {
     for (entity, state, frame) in query.iter() {
         if !state.is_intangible(&frame.0) {
-            commands
-                .entity(entity)
-                .remove::<Intangible>();
+            commands.entity(entity).remove::<Intangible>();
         }
     }
 }
@@ -260,9 +255,7 @@ fn add_intangible(
 ) {
     for (entity, state, frame) in query.iter() {
         if state.is_intangible(&frame.0) {
-            commands
-                .entity(entity)
-                .insert(Intangible);
+            commands.entity(entity).insert(Intangible);
         }
     }
 }
@@ -272,11 +265,18 @@ pub struct FacingUpdate(Entity, Facing);
 
 fn update_facing(mut updates: EventReader<FacingUpdate>, mut commands: Commands) {
     for update in updates.read() {
-        commands
-            .entity(update.0)
-            .insert(update.1);
+        commands.entity(update.0).insert(update.1);
     }
 }
+
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FighterEventSet {
+    Emit,
+    Consume,
+}
+
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FighterSet;
 
 pub struct FighterPlugin;
 impl Plugin for FighterPlugin {
@@ -285,16 +285,24 @@ impl Plugin for FighterPlugin {
             .add_systems(
                 FixedUpdate,
                 (
-                    land,
-                    go_airborne,
-                    remove_intangible,
-                    add_intangible,
-                    update_facing,
-                    update_fighter_state,
-                    compute_common_side_effects,
+                    compute_common_side_effects.in_set(FighterEventSet::Emit),
+                    (
+                        update_fighter_state,
+                        update_facing,
+                        land,
+                        go_airborne,
+                        remove_intangible,
+                        add_intangible,
+                    )
+                        .chain()
+                        .in_set(FighterEventSet::Consume),
                 )
                     .chain()
-                    .before(crate::update_frame_count),
+                    .in_set(FighterSet),
+            )
+            .configure_sets(
+                FixedUpdate,
+                FighterEventSet::Emit.before(FighterEventSet::Consume),
             )
             .add_event::<FighterStateUpdate>()
             .add_event::<IntangibleUpdate>()
