@@ -5,7 +5,8 @@ use crate::{
     input::ControlStick,
     physics::{AddVelocity, Collision, Gravity, Position, SetVelocity, Velocity},
     utils::{FrameCount, FrameNumber},
-    Airborne, AnimationIndices, AnimationTimer, AnimationUpdate, AnimationUpdateEvent, Facing,
+    AccelerateTowards, Airborne, AnimationIndices, AnimationTimer, AnimationUpdate,
+    AnimationUpdateEvent, Facing,
 };
 
 pub mod megaman;
@@ -68,10 +69,12 @@ impl FighterState {
 pub trait FighterStateMachine {
     fn dash_duration(&self) -> FrameNumber;
     fn dash_speed(&self) -> f32;
+    fn walk_speed(&self) -> f32;
     fn land_crouch_duration(&self) -> FrameNumber;
     fn idle_cycle_duration(&self) -> FrameNumber;
     fn jumpsquat(&self) -> FrameNumber;
     fn jump_speed(&self) -> f32;
+    fn ground_friction(&self) -> f32;
     fn turnaround_duration(&self) -> FrameNumber {
         TURNAROUND_DURATION_FRAMES
     }
@@ -151,11 +154,11 @@ fn compute_common_side_effects(
     )>,
     mut ev_state: EventWriter<FighterStateUpdate>,
     mut ev_facing: EventWriter<FacingUpdate>,
+    mut ev_accelerate: EventWriter<AccelerateTowards>,
     mut ev_add_velocity: EventWriter<AddVelocity>,
     mut ev_set_velocity: EventWriter<SetVelocity>,
 ) {
     for (entity, state, frame, facing, sm, control_stick, v) in &query {
-        // log::info!("Getting side effects for {:?}", entity);
         // Implementation-specific stuff
         match state {
             FighterState::LandCrouch if frame.0 == sm.land_crouch_duration() => {
@@ -171,6 +174,15 @@ fn compute_common_side_effects(
                 ev_add_velocity.send(AddVelocity(entity, Vec2::new(0.0, sm.jump_speed())));
             }
             _ => {}
+        }
+        if state.is_grounded() {
+            let target_horizontal = control_stick.0.x * sm.walk_speed();
+            let target = Vec2::new(target_horizontal, 0.0);
+            ev_accelerate.send(AccelerateTowards {
+                entity,
+                target,
+                acceleration: sm.ground_friction(),
+            });
         }
         // Global stuff
         match (state, frame.0) {
@@ -249,11 +261,6 @@ fn go_airborne(
         .for_each(|x| {
             ev_state.send(x);
         });
-    // for (e, s) in &q {
-    //     if s.is_grounded() {
-    //         ev_state.send(FighterStateUpdate(e, FighterState::IdleAirborne));
-    //     }
-    // }
 }
 
 #[derive(Component)]

@@ -33,6 +33,29 @@ fn set_velocity(mut ev_add_velocity: EventReader<SetVelocity>, mut query: Query<
     }
 }
 
+#[derive(Event)]
+pub struct AccelerateTowards {
+    pub entity: Entity,
+    pub target: Vec2,
+    pub acceleration: f32,
+}
+
+fn accelerate_towards(
+    mut ev_accelerate: EventReader<AccelerateTowards>,
+    mut query: Query<&mut Velocity>,
+) {
+    for event in ev_accelerate.read() {
+        if let Ok(mut v) = query.get_mut(event.entity) {
+            let difference = event.target - v.0;
+            if difference.length() <= event.acceleration {
+                v.0 = event.target;
+            } else {
+                v.0 += difference.normalize() * event.acceleration;
+            }
+        }
+    }
+}
+
 #[derive(Component)]
 pub struct Gravity(pub f32);
 
@@ -130,6 +153,7 @@ impl Plugin for PhysicsPlugin {
             FixedUpdate,
             (
                 set_velocity,
+                accelerate_towards,
                 add_velocity,
                 accelerate_from_gravity,
                 apply_velocity,
@@ -137,6 +161,7 @@ impl Plugin for PhysicsPlugin {
                 .chain()
                 .in_set(PhysicsSet),
         )
+        .add_event::<AccelerateTowards>()
         .add_event::<AddVelocity>()
         .add_event::<SetVelocity>()
         .add_event::<Collision>();

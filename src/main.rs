@@ -90,7 +90,7 @@ fn setup(
             frame: FrameCount(0),
             facing: Facing(LeftRight::Right),
             position: Position::default(),
-            velocity: Velocity::default(),
+            velocity: Velocity(Vec2::new(5.0, 0.0)),
             gravity: Gravity(GRAVITY),
             state: fighter::FighterState::default(),
             sprite_sheet_bundle,

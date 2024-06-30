@@ -27,6 +27,10 @@ impl FighterStateMachine for MegaMan {
         DASH_SPEED
     }
 
+    fn walk_speed(&self) -> f32 {
+        WALK_SPEED
+    }
+
     fn land_crouch_duration(&self) -> FrameNumber {
         LANDING_LAG
     }
@@ -41,6 +45,10 @@ impl FighterStateMachine for MegaMan {
 
     fn jump_speed(&self) -> f32 {
         10.0
+    }
+
+    fn ground_friction(&self) -> f32 {
+        FRICTION
     }
 
     fn animation_for_state(&self, state: &FighterState) -> Option<AnimationUpdate> {
