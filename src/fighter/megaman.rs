@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use crate::{
     fighter::FighterEventSet,
     utils::{FrameCount, FrameNumber},
-    AnimationIndices, AnimationUpdate, AnimationUpdateEvent,
+    AnimationIndices, AnimationUpdate, AnimationUpdateEvent, Velocity,
 };
 
 const LANDING_LAG: FrameNumber = 12;
@@ -53,10 +53,10 @@ impl FighterStateMachine for MegaMan {
 // }
 
 fn emit_animation_update(
-    q: Query<(Entity, &FighterState, &FrameCount), With<MegaMan>>,
+    q: Query<(Entity, &FighterState, &FrameCount, &Velocity), With<MegaMan>>,
     mut ev_animation: EventWriter<AnimationUpdateEvent>,
 ) {
-    for (e, state, frame) in &q {
+    for (e, state, frame, velocity) in &q {
         if let Some(update) = match (state, frame.0) {
             (FighterState::Idle, 1) => Some(AnimationUpdate::SingleFrame(0)),
             // Blinky blinky
@@ -65,10 +65,38 @@ fn emit_animation_update(
                 seconds_per_frame: 0.1,
             }),
             (FighterState::LandCrouch, 1) => Some(AnimationUpdate::SingleFrame(133)),
+            (FighterState::IdleAirborne, _) => {
+                let y = velocity.0.y;
+                if y > 1.5 {
+                    Some(AnimationUpdate::SingleFrame(18))
+                } else if y > -1.5 {
+                    Some(AnimationUpdate::SingleFrame(19))
+                } else {
+                    Some(AnimationUpdate::MultiFrame {
+                        indices: AnimationIndices {
+                            first: 20,
+                            last: 21,
+                        },
+                        seconds_per_frame: 0.15,
+                    })
+                }
+            }
+            (FighterState::JumpSquat, 1) => Some(AnimationUpdate::SingleFrame(133)),
+            (FighterState::Walk, 1) => Some(AnimationUpdate::MultiFrame {
+                indices: AnimationIndices { first: 5, last: 14 },
+                seconds_per_frame: 0.1,
+            }),
+            (FighterState::Airdodge, 1) => Some(AnimationUpdate::SingleFrame(33)),
+            (FighterState::Dash, 1) => Some(AnimationUpdate::SingleFrame(24)),
+            (FighterState::Turnaround, 1) => Some(AnimationUpdate::SingleFrame(74)),
+            (FighterState::RunTurnaround, 1) => Some(AnimationUpdate::SingleFrame(30)),
+            (FighterState::Run, 1) => Some(AnimationUpdate::MultiFrame {
+                indices: AnimationIndices { first: 5, last: 14 },
+                seconds_per_frame: 0.1,
+            }),
             _ => None,
         } {
             let event = AnimationUpdateEvent(e, update);
-            log::info!("{:?}", event);
             ev_animation.send(event);
         }
     }
