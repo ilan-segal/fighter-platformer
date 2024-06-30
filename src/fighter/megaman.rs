@@ -43,7 +43,7 @@ impl FighterStateMachine for MegaMan {
         10.0
     }
 
-    fn animation_update(&self, state: &FighterState) -> Option<AnimationUpdate> {
+    fn animation_for_state(&self, state: &FighterState) -> Option<AnimationUpdate> {
         match state {
             FighterState::Idle => Some(AnimationUpdate::SingleFrame(0)),
             FighterState::LandCrouch => Some(AnimationUpdate::SingleFrame(133)),

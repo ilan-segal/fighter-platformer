@@ -66,7 +66,6 @@ impl FighterState {
 
 #[bevy_trait_query::queryable]
 pub trait FighterStateMachine {
-    fn animation_update(&self, state: &FighterState) -> Option<AnimationUpdate>;
     fn dash_duration(&self) -> FrameNumber;
     fn dash_speed(&self) -> f32;
     fn land_crouch_duration(&self) -> FrameNumber;
@@ -88,6 +87,8 @@ pub trait FighterStateMachine {
     fn airdodge_duration(&self) -> FrameNumber {
         AIRDODGE_DURATION_FRAMES
     }
+    /* Basic per-state animation, doesn't account for things like velocity or frame number */
+    fn animation_for_state(&self, state: &FighterState) -> Option<AnimationUpdate>;
 }
 
 #[derive(Event)]
@@ -130,7 +131,7 @@ fn get_animation_from_state(
             continue;
         }
         if let Some(event) = state_machine
-            .animation_update(state)
+            .animation_for_state(state)
             .map(|update| AnimationUpdateEvent(e, update))
         {
             ev_animation.send(event);
