@@ -21,7 +21,7 @@ pub enum Button {
 pub struct ControlStick(pub Vec2);
 
 const MAX_NUM_PLAYERS: usize = 8;
-#[derive(Resource)]
+#[derive(Resource, Default)]
 struct Controllers([Option<ControlStick>; MAX_NUM_PLAYERS]);
 
 fn read_input_events(
@@ -117,7 +117,7 @@ pub struct InputSet;
 pub struct InputPlugin;
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_systems(
+        app.init_resource::<Controllers>().add_systems(
             FixedUpdate,
             (read_input_events, map_input_to_players)
                 .chain()
