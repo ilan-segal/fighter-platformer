@@ -1,7 +1,7 @@
 // use std::collections::HashSet;
 
 use bevy::{prelude::*, sprite::Anchor};
-use input::ControlStick;
+use input::{ControlStick, InputSet};
 use iyes_perf_ui::prelude::*;
 use log::info;
 
@@ -40,7 +40,7 @@ fn main() {
         .add_systems(FixedUpdate, increment_frame_number)
         .configure_sets(
             FixedUpdate,
-            (FighterSet, PhysicsSet, ViewSet)
+            (InputSet, FighterSet, PhysicsSet, ViewSet)
                 .chain()
                 .before(increment_frame_number),
         )
