@@ -1,10 +1,10 @@
-use bevy::{input::gamepad::*, prelude::*};
+use bevy::{input::gamepad::*, prelude::*, utils::petgraph::matrix_graph::Zero};
 use enumset::{EnumSet, EnumSetType};
 use std::collections::HashMap;
 
 use crate::fighter::Player;
 
-#[derive(EnumSetType)]
+#[derive(EnumSetType, Debug)]
 pub enum Action {
     Attack,
     Special,
@@ -14,7 +14,7 @@ pub enum Action {
     Taunt,
 }
 
-#[derive(Component, Default, Clone, Copy)]
+#[derive(Component, Default, Clone, Copy, Debug)]
 pub struct Control {
     pub stick: Vec2,
     pub held_actions: EnumSet<Action>,
@@ -23,12 +23,21 @@ pub struct Control {
 #[derive(Component)]
 pub struct GamepadButtonMapping(HashMap<GamepadButtonType, Action>);
 
-impl GamepadButtonMapping {
-    fn map(&self, button: &GamepadButtonType) -> Option<Action> {
+trait ButtonMapper {
+    fn map_button(&self, button: &GamepadButtonType) -> Option<Action>;
+}
+
+impl ButtonMapper for GamepadButtonMapping {
+    fn map_button(&self, button: &GamepadButtonType) -> Option<Action> {
         self.0.get(button).copied()
     }
+}
 
-    fn default_map(button: &GamepadButtonType) -> Option<Action> {
+impl ButtonMapper for Option<&GamepadButtonMapping> {
+    fn map_button(&self, button: &GamepadButtonType) -> Option<Action> {
+        if let Some(mapping) = self {
+            return mapping.map_button(button);
+        }
         match button {
             GamepadButtonType::North | GamepadButtonType::West => Some(Action::Jump),
             GamepadButtonType::East => Some(Action::Attack),
@@ -48,7 +57,7 @@ impl GamepadButtonMapping {
     }
 }
 
-fn read_input_events(
+fn update_control_state(
     mut ev_gamepad: EventReader<GamepadEvent>,
     mut control: Query<(&Player, &mut Control, Option<&GamepadButtonMapping>)>,
 ) {
@@ -79,24 +88,54 @@ fn read_input_events(
             GamepadEvent::Button(event) => {
                 log::info!("Button event: {:?}", event);
                 let id = event.gamepad.id;
-                if let Some((_, mut control, maybe_mapping)) = control
+                if let Some((_, mut control, mapping)) = control
                     .iter_mut()
                     .filter(|(player, ..)| player.0 == id)
                     .next()
                 {
-                    if let Some(action) = maybe_mapping
-                        .and_then(|m| m.map(&event.button_type))
-                        .or_else(|| GamepadButtonMapping::default_map(&event.button_type))
-                    {
-                        if event.value.is_sign_positive() {
-                            control.held_actions.insert(action);
-                        } else {
+                    if let Some(action) = mapping.map_button(&event.button_type) {
+                        if event.value.is_zero() {
                             control.held_actions.remove(action);
+                        } else {
+                            control.held_actions.insert(action);
                         }
                     }
+                    log::info!("{:?}", control);
                 }
             }
             _ => {}
+        }
+    }
+}
+
+#[derive(Event, Debug)]
+pub struct ActionEvent(pub Entity, pub Action);
+
+fn emit_action_events(
+    mut ev_gamepad: EventReader<GamepadEvent>,
+    mut ev_action: EventWriter<ActionEvent>,
+    player: Query<(Entity, &Player, Option<&GamepadButtonMapping>)>,
+) {
+    for (player_id, button_type) in ev_gamepad
+        .read()
+        .filter_map(|event| match event {
+            GamepadEvent::Button(e) => Some(e),
+            _ => None,
+        })
+        .filter_map(|event| {
+            if event.value.is_zero() {
+                None
+            } else {
+                Some((event.gamepad.id, event.button_type))
+            }
+        })
+    {
+        if let Some((entity, _, mapping)) =
+            player.iter().filter(|(_, p, _)| p.0 == player_id).next()
+        {
+            if let Some(action) = mapping.map_button(&button_type) {
+                ev_action.send(ActionEvent(entity, action));
+            }
         }
     }
 }
@@ -138,6 +177,12 @@ pub struct InputSet;
 pub struct InputPlugin;
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_systems(FixedUpdate, read_input_events.in_set(InputSet));
+        app.add_systems(
+            FixedUpdate,
+            (update_control_state, emit_action_events)
+                .chain()
+                .in_set(InputSet),
+        )
+        .add_event::<ActionEvent>();
     }
 }

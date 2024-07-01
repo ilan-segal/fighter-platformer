@@ -311,20 +311,20 @@ pub struct FighterSet;
 
 pub struct FighterPlugin;
 impl Plugin for FighterPlugin {
-    fn build(&self, app: &mut bevy::prelude::App) {
+    fn build(&self, app: &mut App) {
         app.add_plugins(megaman::MegaManPlugin)
             .add_systems(
                 FixedUpdate,
                 (
-                    (get_animation_from_state, compute_common_side_effects)
-                        .in_set(FighterEventSet::Emit),
+                    compute_common_side_effects.in_set(FighterEventSet::Emit),
                     (
-                        update_fighter_state,
-                        update_facing,
                         land,
                         go_airborne,
+                        update_fighter_state,
+                        update_facing,
                         remove_intangible,
                         add_intangible,
+                        get_animation_from_state,
                     )
                         .chain()
                         .in_set(FighterEventSet::Consume),

@@ -2,7 +2,8 @@ use super::{FighterState, FighterStateMachine};
 use bevy::prelude::*;
 
 use crate::{
-    fighter::FighterEventSet,
+    fighter::{FighterEventSet, FighterStateUpdate},
+    input::{Action, ActionEvent},
     utils::{FrameCount, FrameNumber},
     AnimationIndices, AnimationUpdate, AnimationUpdateEvent, Velocity,
 };
@@ -81,6 +82,28 @@ impl FighterStateMachine for MegaMan {
 //     for (entity, state, frame, facing) in query.iter() {}
 // }
 
+fn consome_action_events(
+    q: Query<(Entity, &FighterState), With<MegaMan>>,
+    mut ev_action: EventReader<ActionEvent>,
+    mut ev_state: EventWriter<FighterStateUpdate>,
+) {
+    for event in ev_action.read() {
+        log::info!("{:?}", event);
+        if let Ok((e, state)) = q.get(event.0) {
+            if let Some(new_state) = get_action_transition(&state, &event.1) {
+                ev_state.send(FighterStateUpdate(e, new_state));
+            }
+        }
+    }
+}
+
+fn get_action_transition(state: &FighterState, action: &Action) -> Option<FighterState> {
+    match (state, action) {
+        (FighterState::Idle, Action::Jump) => Some(FighterState::JumpSquat),
+        _ => None,
+    }
+}
+
 fn emit_animation_update(
     q: Query<(Entity, &FighterState, &FrameCount, &Velocity), With<MegaMan>>,
     mut ev_animation: EventWriter<AnimationUpdateEvent>,
@@ -124,7 +147,7 @@ impl Plugin for MegaManPlugin {
         app.register_component_as::<dyn FighterStateMachine, MegaMan>()
             .add_systems(
                 FixedUpdate,
-                emit_animation_update.in_set(FighterEventSet::Emit),
+                (consome_action_events, emit_animation_update).in_set(FighterEventSet::Emit),
             );
     }
 }
