@@ -56,7 +56,7 @@ pub fn update_animation_data(
     for event in ev_update.read() {
         let id = event.0;
         let Ok((mut idx, mut timer, mut atlas)) = q.get_mut(id) else {
-            log::warn!("No valid entity {:?}", id);
+            warn!("No valid entity {:?}", id);
             continue;
         };
         match &event.1 {

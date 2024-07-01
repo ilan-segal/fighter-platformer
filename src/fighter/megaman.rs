@@ -88,7 +88,7 @@ fn consome_action_events(
     mut ev_state: EventWriter<FighterStateUpdate>,
 ) {
     for event in ev_action.read() {
-        log::info!("{:?}", event);
+        debug!("{:?}", event);
         if let Ok((e, state)) = q.get(event.0) {
             if let Some(new_state) = get_action_transition(&state, &event.1) {
                 ev_state.send(FighterStateUpdate(e, new_state));

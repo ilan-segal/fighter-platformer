@@ -86,7 +86,7 @@ fn update_control_state(
                 }
             }
             GamepadEvent::Button(event) => {
-                log::info!("Button event: {:?}", event);
+                debug!("Button event: {:?}", event);
                 let id = event.gamepad.id;
                 if let Some((_, mut control, mapping)) = control
                     .iter_mut()
@@ -100,7 +100,7 @@ fn update_control_state(
                             control.held_actions.insert(action);
                         }
                     }
-                    log::info!("{:?}", control);
+                    debug!("{:?}", control);
                 }
             }
             _ => {}

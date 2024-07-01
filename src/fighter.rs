@@ -105,7 +105,7 @@ fn update_fighter_state(
         let entity = update.0;
         if let Ok((mut state, mut frame_count)) = q.get_mut(entity) {
             let new_state = update.1;
-            log::info!(
+            debug!(
                 "{:?} {:?}({:?}) -> {:?}",
                 entity,
                 state.clone(),
@@ -115,7 +115,7 @@ fn update_fighter_state(
             *state = new_state;
             frame_count.0 = 0;
         } else {
-            log::warn!("No entity found {:?}", entity);
+            warn!("No entity found {:?}", entity);
         }
     }
 }

@@ -1,9 +1,8 @@
 // use std::collections::HashSet;
 
-use bevy::{prelude::*, sprite::Anchor};
+use bevy::{log::LogPlugin, prelude::*, sprite::Anchor};
 use input::{Control, InputSet};
 use iyes_perf_ui::prelude::*;
-use log::info;
 
 mod fighter;
 mod input;
@@ -21,9 +20,17 @@ const GRAVITY: f32 = -0.3;
 const CONTROL_STICK_DEADZONE: f32 = 0.8;
 
 fn main() {
-    info!("Starting...");
+    debug!("Starting...");
     App::new()
-        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
+        .add_plugins(
+            DefaultPlugins
+                .set(ImagePlugin::default_nearest())
+                .set(LogPlugin {
+                    level: bevy::log::Level::INFO,
+                    filter: "fighter_platformer=debug".to_string(),
+                    update_subscriber: None,
+                }),
+        )
         // we want Bevy to measure these values for us:
         .add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin)
         .add_plugins(bevy::diagnostic::EntityCountDiagnosticsPlugin)
@@ -149,7 +156,7 @@ fn setup(
 //     }
 
 //     fn set_new_state(&mut self, state: &BasicState) {
-//         info!("{:?} -> {:?}", self.state, state);
+//         debug!("{:?} -> {:?}", self.state, state);
 //         self.state = *state;
 //         self.frame_count = 0;
 //     }
