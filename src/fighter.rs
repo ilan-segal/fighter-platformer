@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy_trait_query::One;
 
 use crate::{
-    input::Control,
+    input::{Action, Control},
     physics::{AddVelocity, Collision, Gravity, Position, SetVelocity, Velocity},
     utils::{FrameCount, FrameNumber},
     AccelerateTowards, Airborne, AnimationIndices, AnimationTimer, AnimationUpdate,
@@ -171,7 +171,13 @@ fn compute_common_side_effects(
                 ev_state.send(FighterStateUpdate(entity, FighterState::Run));
             }
             FighterState::JumpSquat if frame.0 == sm.jumpsquat() => {
-                ev_add_velocity.send(AddVelocity(entity, Vec2::new(0.0, sm.jump_speed())));
+                let jump_speed = if control.held_actions.contains(Action::Jump) {
+                    sm.jump_speed()
+                } else {
+                    // Short-hop, half the max-height of a full-hop
+                    sm.jump_speed() * 0.5_f32.sqrt()
+                };
+                ev_add_velocity.send(AddVelocity(entity, Vec2::new(0.0, jump_speed)));
             }
             _ => {}
         }
