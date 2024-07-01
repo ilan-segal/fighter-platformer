@@ -1,7 +1,7 @@
 // use std::collections::HashSet;
 
 use bevy::{prelude::*, sprite::Anchor};
-use input::{ControlStick, InputSet};
+use input::{Control, InputSet};
 use iyes_perf_ui::prelude::*;
 use log::info;
 
@@ -96,7 +96,7 @@ fn setup(
             sprite_sheet_bundle,
             animation_indices,
             animation_timer,
-            control_stick: ControlStick::default(),
+            control: Control::default(),
         },
         MegaMan,
     ));

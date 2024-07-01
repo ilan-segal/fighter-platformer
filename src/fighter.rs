@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy_trait_query::One;
 
 use crate::{
-    input::ControlStick,
+    input::Control,
     physics::{AddVelocity, Collision, Gravity, Position, SetVelocity, Velocity},
     utils::{FrameCount, FrameNumber},
     AccelerateTowards, Airborne, AnimationIndices, AnimationTimer, AnimationUpdate,
@@ -149,7 +149,7 @@ fn compute_common_side_effects(
         &FrameCount,
         &Facing,
         One<&dyn FighterStateMachine>,
-        &ControlStick,
+        &Control,
         &Velocity,
     )>,
     mut ev_state: EventWriter<FighterStateUpdate>,
@@ -158,7 +158,7 @@ fn compute_common_side_effects(
     mut ev_add_velocity: EventWriter<AddVelocity>,
     mut ev_set_velocity: EventWriter<SetVelocity>,
 ) {
-    for (entity, state, frame, facing, sm, control_stick, v) in &query {
+    for (entity, state, frame, facing, sm, control, v) in &query {
         // Implementation-specific stuff
         match state {
             FighterState::LandCrouch if frame.0 == sm.land_crouch_duration() => {
@@ -176,7 +176,7 @@ fn compute_common_side_effects(
             _ => {}
         }
         if state.is_grounded() {
-            let target_horizontal = control_stick.0.x * sm.walk_speed();
+            let target_horizontal = control.stick.x * sm.walk_speed();
             let target = Vec2::new(target_horizontal, 0.0);
             ev_accelerate.send(AccelerateTowards {
                 entity,
@@ -205,8 +205,8 @@ fn compute_common_side_effects(
                 ev_state.send(FighterStateUpdate(entity, FighterState::Idle));
             }
             (FighterState::Airdodge, 0) => {
-                let control = if control_stick.0.length() > crate::CONTROL_STICK_DEADZONE {
-                    control_stick.0.normalize_or_zero()
+                let control = if control.stick.length() > crate::CONTROL_STICK_DEADZONE {
+                    control.stick.normalize_or_zero()
                 } else {
                     Vec2::ZERO
                 };
@@ -225,7 +225,7 @@ fn compute_common_side_effects(
                 }
             }
             (FighterState::Dash, 0) => {
-                let dv_x = control_stick.0.x.signum() * sm.dash_speed();
+                let dv_x = control.stick.x.signum() * sm.dash_speed();
                 ev_set_velocity.send(SetVelocity(entity, Vec2::new(0.0, dv_x)));
             }
             _ => {}
@@ -354,5 +354,5 @@ pub struct FighterBundle {
     pub sprite_sheet_bundle: SpriteSheetBundle,
     pub animation_indices: AnimationIndices,
     pub animation_timer: AnimationTimer,
-    pub control_stick: ControlStick,
+    pub control: Control,
 }
