@@ -2,7 +2,9 @@ use bevy::{input::gamepad::*, prelude::*, utils::petgraph::matrix_graph::Zero};
 use enumset::{EnumSet, EnumSetType};
 use std::collections::HashMap;
 
-use crate::fighter::Player;
+use crate::{fighter::Player, utils::FrameNumber};
+
+const BUFFER_SIZE: FrameNumber = 4;
 
 #[derive(EnumSetType, Debug)]
 pub enum Action {
@@ -108,12 +110,27 @@ fn update_control_state(
     }
 }
 
+#[derive(Component)]
+pub struct Buffer {
+    pub action: Action,
+    pub age: FrameNumber,
+}
+
+fn age_buffer(mut q: Query<(Entity, &mut Buffer)>, mut commands: Commands) {
+    for (e, mut b) in &mut q {
+        b.age += 1;
+        if b.age == BUFFER_SIZE {
+            commands.entity(e).remove::<Buffer>();
+        }
+    }
+}
+
 #[derive(Event, Debug)]
 pub struct ActionEvent(pub Entity, pub Action);
 
-fn emit_action_events(
+fn buffer_actions(
+    mut commands: Commands,
     mut ev_gamepad: EventReader<GamepadEvent>,
-    mut ev_action: EventWriter<ActionEvent>,
     player: Query<(Entity, &Player, Option<&GamepadButtonMapping>)>,
 ) {
     for (player_id, button_type) in ev_gamepad
@@ -130,48 +147,31 @@ fn emit_action_events(
             }
         })
     {
-        if let Some((entity, _, mapping)) = player
+        if let Some((e, action)) = player
             .iter()
             .filter(|(_, p, _)| p.0 == player_id)
+            .filter_map(|(e, _, mapping)| {
+                mapping
+                    .map_button(&button_type)
+                    .map(|action| (e, action))
+            })
             .next()
         {
-            if let Some(action) = mapping.map_button(&button_type) {
-                ev_action.send(ActionEvent(entity, action));
-            }
+            commands
+                .entity(e)
+                .insert(Buffer { action, age: 0 });
         }
     }
 }
 
-// pub enum FighterAction {
-//     Jab,
-//     UpTilt,
-//     ForwardTilt,
-//     DownTilt,
-//     NeutralAir,
-//     UpAir,
-//     ForwardAir,
-//     BackAir,
-//     DownAir,
-//     UpSmash,
-//     ForwardSmash,
-//     DownSmash,
-//     Grab,
-//     NeutralSpecial,
-//     UpSpecial,
-//     ForwardSpecial,
-//     DownSpecial,
-//     Shield,
-//     Spotdodge,
-//     Roll,
-//     Dash,
-//     Jump,
-//     FastFall,
-//     HitFall,
-//     Airdodge,
-// }
-
-// #[derive(Event)]
-// pub struct FighterInput(Entity, FighterAction);
+fn emit_action_events(mut ev_action: EventWriter<ActionEvent>, player: Query<(Entity, &Buffer)>) {
+    player
+        .iter()
+        .map(|(entity, buffer)| ActionEvent(entity, buffer.action))
+        .for_each(|event| {
+            ev_action.send(event);
+        });
+}
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InputSet;
@@ -181,7 +181,11 @@ impl Plugin for InputPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.add_systems(
             FixedUpdate,
-            (update_control_state, emit_action_events)
+            (
+                (update_control_state, buffer_actions),
+                age_buffer,
+                emit_action_events,
+            )
                 .chain()
                 .in_set(InputSet),
         )

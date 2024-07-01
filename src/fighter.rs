@@ -211,10 +211,6 @@ fn compute_common_side_effects(
             (FighterState::RunTurnaround, RUN_TURNAROUND_THRESHOLD_FRAME) => {
                 ev_facing.send(FacingUpdate(entity, Facing(facing.0.flip())));
             }
-            (FighterState::Airdodge, AIRDODGE_DURATION_FRAMES) => {
-                ev_set_velocity.send(SetVelocity(entity, Vec2::ZERO));
-                ev_state.send(FighterStateUpdate(entity, FighterState::IdleAirborne));
-            }
             (FighterState::RunEnd, 2) => {
                 ev_state.send(FighterStateUpdate(entity, FighterState::Idle));
             }
@@ -225,6 +221,10 @@ fn compute_common_side_effects(
                     Vec2::ZERO
                 };
                 ev_set_velocity.send(SetVelocity(entity, control * AIRDODGE_INITIAL_SPEED));
+            }
+            (FighterState::Airdodge, AIRDODGE_DURATION_FRAMES) => {
+                ev_set_velocity.send(SetVelocity(entity, Vec2::ZERO));
+                ev_state.send(FighterStateUpdate(entity, FighterState::IdleAirborne));
             }
             (FighterState::Dash, 0) => {
                 let dv_x = control.stick.x.signum() * properties.dash_speed();

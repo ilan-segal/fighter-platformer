@@ -10,7 +10,7 @@ use crate::{
 
 const LANDING_LAG: FrameNumber = 12;
 const IDLE_CYCLE: FrameNumber = 240;
-const JUMPSQUAT: FrameNumber = 3;
+const JUMPSQUAT: FrameNumber = 4;
 const FRICTION: f32 = 0.3;
 const WALK_SPEED: f32 = 3.0;
 const DASH_SPEED: f32 = 5.0;
@@ -106,6 +106,7 @@ fn get_action_transition(state: &FighterState, action: &Action) -> Option<Fighte
     match (state, action) {
         (FighterState::Idle, Action::Jump) => Some(FighterState::JumpSquat),
         (FighterState::IdleAirborne, Action::Shield) => Some(FighterState::Airdodge),
+        (FighterState::JumpSquat, Action::Shield) => Some(FighterState::Airdodge),
         _ => None,
     }
 }
