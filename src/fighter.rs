@@ -325,8 +325,8 @@ fn update_gravity(
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FighterEventSet {
-    Emit,
-    Consume,
+    Act,
+    React,
 }
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
@@ -339,7 +339,7 @@ impl Plugin for FighterPlugin {
             .add_systems(
                 FixedUpdate,
                 (
-                    compute_common_side_effects.in_set(FighterEventSet::Emit),
+                    compute_common_side_effects.in_set(FighterEventSet::Act),
                     (
                         land,
                         go_airborne,
@@ -351,14 +351,14 @@ impl Plugin for FighterPlugin {
                         get_animation_from_state,
                     )
                         .chain()
-                        .in_set(FighterEventSet::Consume),
+                        .in_set(FighterEventSet::React),
                 )
                     .chain()
                     .in_set(FighterSet),
             )
             .configure_sets(
                 FixedUpdate,
-                FighterEventSet::Emit.before(FighterEventSet::Consume),
+                FighterEventSet::Act.before(FighterEventSet::React),
             )
             .add_event::<FighterStateUpdate>()
             .add_event::<FacingUpdate>();

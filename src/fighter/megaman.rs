@@ -154,7 +154,7 @@ impl Plugin for MegaManPlugin {
         app.register_component_as::<dyn FighterProperties, MegaMan>()
             .add_systems(
                 FixedUpdate,
-                (consome_action_events, emit_animation_update).in_set(FighterEventSet::Emit),
+                (consome_action_events, emit_animation_update).in_set(FighterEventSet::Act),
             );
     }
 }

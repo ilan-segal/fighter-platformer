@@ -10,7 +10,7 @@ mod physics;
 mod utils;
 mod view;
 
-use fighter::{megaman::MegaMan, FighterBundle, FighterSet, Player as PlayerId};
+use fighter::{megaman::MegaMan, FighterBundle, FighterEventSet, FighterSet, Player as PlayerId};
 use physics::*;
 use utils::{Facing, FrameCount, FrameNumber, LeftRight};
 use view::*;
@@ -43,7 +43,13 @@ fn main() {
         .add_systems(FixedUpdate, increment_frame_number)
         .configure_sets(
             FixedUpdate,
-            (InputSet, FighterSet, PhysicsSet, ViewSet)
+            (
+                InputSet,
+                FighterEventSet::Act,
+                PhysicsSet,
+                FighterEventSet::React,
+                ViewSet,
+            )
                 .chain()
                 .before(increment_frame_number),
         )
