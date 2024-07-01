@@ -48,9 +48,9 @@ fn main() {
 }
 
 fn increment_frame_number(mut query: Query<&mut FrameCount>) {
-    for mut frame_count in &mut query {
+    query.iter_mut().for_each(|mut frame_count| {
         frame_count.0 += 1;
-    }
+    });
 }
 
 fn setup(

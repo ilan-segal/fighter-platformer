@@ -239,6 +239,9 @@ fn land(
     mut ev_state: EventWriter<FighterStateUpdate>,
 ) {
     for collision in ev_collision.read() {
+        if collision.normal.x != 0.0 || collision.normal.y.is_sign_negative() {
+            continue;
+        }
         let entity_id = collision.entity;
         if let Ok(state) = q.get(entity_id) {
             match state {
