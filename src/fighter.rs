@@ -234,13 +234,13 @@ fn compute_common_side_effects(
 }
 
 fn land(
-    q: Query<(&FighterState, &Velocity)>,
+    q: Query<&FighterState>,
     mut ev_collision: EventReader<Collision>,
     mut ev_state: EventWriter<FighterStateUpdate>,
 ) {
     for collision in ev_collision.read() {
         let entity_id = collision.entity;
-        if let Ok((state, velocity)) = q.get(entity_id) {
+        if let Ok(state) = q.get(entity_id) {
             match state {
                 FighterState::Airdodge | FighterState::IdleAirborne => {
                     ev_state.send(FighterStateUpdate(entity_id, FighterState::LandCrouch));
@@ -265,9 +265,6 @@ fn go_airborne(
 
 #[derive(Component)]
 pub struct Intangible;
-
-#[derive(Event)]
-pub struct IntangibleUpdate(Entity, bool);
 
 fn remove_intangible(
     mut commands: Commands,
@@ -337,7 +334,6 @@ impl Plugin for FighterPlugin {
                 FighterEventSet::Emit.before(FighterEventSet::Consume),
             )
             .add_event::<FighterStateUpdate>()
-            .add_event::<IntangibleUpdate>()
             .add_event::<FacingUpdate>();
     }
 }

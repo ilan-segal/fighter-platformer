@@ -1,9 +1,4 @@
-use bevy::{
-    app::{FixedUpdate, Plugin},
-    ecs::schedule::{IntoSystemConfigs, SystemSet},
-    prelude::{Commands, Component, Entity, Event, EventReader, EventWriter, Query, Vec2, Without},
-};
-pub const MAX_FLOOR_SLOPE: f32 = 0.1;
+use bevy::{ecs::schedule::SystemSet, prelude::*};
 
 #[derive(Component, Default)]
 pub struct Position(pub Vec2);
