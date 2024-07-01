@@ -147,10 +147,10 @@ impl Plugin for PhysicsPlugin {
         app.add_systems(
             FixedUpdate,
             (
-                set_velocity,
                 accelerate_towards,
                 add_velocity,
                 accelerate_from_gravity,
+                set_velocity,
                 apply_velocity,
             )
                 .chain()

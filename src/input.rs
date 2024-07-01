@@ -42,12 +42,12 @@ impl ButtonMapper for Option<&GamepadButtonMapping> {
             GamepadButtonType::North | GamepadButtonType::West => Some(Action::Jump),
             GamepadButtonType::East => Some(Action::Attack),
             GamepadButtonType::South => Some(Action::Special),
-            GamepadButtonType::LeftTrigger | GamepadButtonType::RightTrigger => {
+            GamepadButtonType::LeftTrigger
+            | GamepadButtonType::RightTrigger
+            | GamepadButtonType::Z => Some(Action::Grab),
+            GamepadButtonType::LeftTrigger2 | GamepadButtonType::RightTrigger2 => {
                 Some(Action::Shield)
             }
-            GamepadButtonType::LeftTrigger2
-            | GamepadButtonType::RightTrigger2
-            | GamepadButtonType::Z => Some(Action::Grab),
             GamepadButtonType::DPadUp
             | GamepadButtonType::DPadDown
             | GamepadButtonType::DPadLeft
@@ -123,15 +123,17 @@ fn emit_action_events(
             _ => None,
         })
         .filter_map(|event| {
-            if event.value.is_zero() {
+            if event.value < 1.0 {
                 None
             } else {
                 Some((event.gamepad.id, event.button_type))
             }
         })
     {
-        if let Some((entity, _, mapping)) =
-            player.iter().filter(|(_, p, _)| p.0 == player_id).next()
+        if let Some((entity, _, mapping)) = player
+            .iter()
+            .filter(|(_, p, _)| p.0 == player_id)
+            .next()
         {
             if let Some(action) = mapping.map_button(&button_type) {
                 ev_action.send(ActionEvent(entity, action));

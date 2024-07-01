@@ -1,4 +1,4 @@
-use super::{FighterState, FighterStateMachine};
+use super::{FighterProperties, FighterState};
 use bevy::prelude::*;
 
 use crate::{
@@ -10,16 +10,21 @@ use crate::{
 
 const LANDING_LAG: FrameNumber = 12;
 const IDLE_CYCLE: FrameNumber = 240;
-const JUMPSQUAT: FrameNumber = 5;
+const JUMPSQUAT: FrameNumber = 3;
 const FRICTION: f32 = 0.3;
 const WALK_SPEED: f32 = 3.0;
 const DASH_SPEED: f32 = 5.0;
 const DASH_DURATION: FrameNumber = 20;
+const GRAVITY: f32 = -0.3;
 
 #[derive(Component)]
 pub struct MegaMan;
 
-impl FighterStateMachine for MegaMan {
+impl FighterProperties for MegaMan {
+    fn gravity(&self) -> f32 {
+        GRAVITY
+    }
+
     fn dash_duration(&self) -> FrameNumber {
         DASH_DURATION
     }
@@ -100,6 +105,7 @@ fn consome_action_events(
 fn get_action_transition(state: &FighterState, action: &Action) -> Option<FighterState> {
     match (state, action) {
         (FighterState::Idle, Action::Jump) => Some(FighterState::JumpSquat),
+        (FighterState::IdleAirborne, Action::Shield) => Some(FighterState::Airdodge),
         _ => None,
     }
 }
@@ -144,7 +150,7 @@ impl Plugin for MegaManPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         use bevy_trait_query::RegisterExt;
 
-        app.register_component_as::<dyn FighterStateMachine, MegaMan>()
+        app.register_component_as::<dyn FighterProperties, MegaMan>()
             .add_systems(
                 FixedUpdate,
                 (consome_action_events, emit_animation_update).in_set(FighterEventSet::Emit),

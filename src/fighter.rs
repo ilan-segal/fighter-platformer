@@ -12,9 +12,9 @@ use crate::{
 pub mod megaman;
 
 const AIRDODGE_INITIAL_SPEED: f32 = 10.0;
-const AIRDODGE_DURATION_FRAMES: FrameNumber = 30;
+const AIRDODGE_DURATION_FRAMES: FrameNumber = 15;
 const AIRDODGE_INTANGIBLE_START: FrameNumber = 4;
-const AIRDODGE_INTANGIBLE_END: FrameNumber = 20;
+const AIRDODGE_INTANGIBLE_END: FrameNumber = 15;
 const TURNAROUND_DURATION_FRAMES: FrameNumber = 14;
 const TURNAROUND_THRESHOLD_FRAME: FrameNumber = TURNAROUND_DURATION_FRAMES / 2;
 const RUN_TURNAROUND_DURATION_FRAMES: FrameNumber = 14;
@@ -63,10 +63,16 @@ impl FighterState {
             _ => false,
         }
     }
+    fn is_affected_by_gravity(&self) -> bool {
+        match self {
+            Self::Airdodge => false,
+            _ => true,
+        }
+    }
 }
 
 #[bevy_trait_query::queryable]
-pub trait FighterStateMachine {
+pub trait FighterProperties {
     fn dash_duration(&self) -> FrameNumber;
     fn dash_speed(&self) -> f32;
     fn walk_speed(&self) -> f32;
@@ -75,6 +81,7 @@ pub trait FighterStateMachine {
     fn jumpsquat(&self) -> FrameNumber;
     fn jump_speed(&self) -> f32;
     fn ground_friction(&self) -> f32;
+    fn gravity(&self) -> f32;
     fn turnaround_duration(&self) -> FrameNumber {
         TURNAROUND_DURATION_FRAMES
     }
@@ -124,16 +131,16 @@ fn get_animation_from_state(
     q: Query<(
         Entity,
         &FighterState,
-        One<&dyn FighterStateMachine>,
+        One<&dyn FighterProperties>,
         &FrameCount,
     )>,
     mut ev_animation: EventWriter<AnimationUpdateEvent>,
 ) {
-    for (e, state, state_machine, frame) in &q {
+    for (e, state, properties, frame) in &q {
         if frame.0 != 1 {
             continue;
         }
-        if let Some(event) = state_machine
+        if let Some(event) = properties
             .animation_for_state(state)
             .map(|update| AnimationUpdateEvent(e, update))
         {
@@ -148,9 +155,8 @@ fn compute_common_side_effects(
         &FighterState,
         &FrameCount,
         &Facing,
-        One<&dyn FighterStateMachine>,
+        One<&dyn FighterProperties>,
         &Control,
-        &Velocity,
     )>,
     mut ev_state: EventWriter<FighterStateUpdate>,
     mut ev_facing: EventWriter<FacingUpdate>,
@@ -158,36 +164,37 @@ fn compute_common_side_effects(
     mut ev_add_velocity: EventWriter<AddVelocity>,
     mut ev_set_velocity: EventWriter<SetVelocity>,
 ) {
-    for (entity, state, frame, facing, sm, control, v) in &query {
+    for (entity, state, frame, facing, properties, control) in &query {
         // Implementation-specific stuff
         match state {
-            FighterState::LandCrouch if frame.0 == sm.land_crouch_duration() => {
+            FighterState::LandCrouch if frame.0 == properties.land_crouch_duration() => {
                 ev_state.send(FighterStateUpdate(entity, FighterState::Idle));
             }
-            FighterState::Idle if frame.0 == sm.idle_cycle_duration() => {
+            FighterState::Idle if frame.0 == properties.idle_cycle_duration() => {
                 ev_state.send(FighterStateUpdate(entity, FighterState::Idle));
             }
-            FighterState::Dash if frame.0 == sm.dash_duration() => {
+            FighterState::Dash if frame.0 == properties.dash_duration() => {
                 ev_state.send(FighterStateUpdate(entity, FighterState::Run));
             }
-            FighterState::JumpSquat if frame.0 == sm.jumpsquat() => {
-                let jump_speed = if control.held_actions.contains(Action::Jump) {
-                    sm.jump_speed()
+            FighterState::JumpSquat if frame.0 == properties.jumpsquat() => {
+                let jump_speed = if control
+                    .held_actions
+                    .contains(Action::Jump)
+                {
+                    properties.jump_speed()
                 } else {
                     // Short-hop, half the max-height of a full-hop
-                    sm.jump_speed() * 0.5_f32.sqrt()
+                    properties.jump_speed() * 0.5_f32.sqrt()
                 };
                 ev_add_velocity.send(AddVelocity(entity, Vec2::new(0.0, jump_speed)));
             }
             _ => {}
         }
         if state.is_grounded() {
-            let target_horizontal = control.stick.x * sm.walk_speed();
-            let target = Vec2::new(target_horizontal, 0.0);
             ev_accelerate.send(AccelerateTowards {
                 entity,
-                target,
-                acceleration: sm.ground_friction(),
+                target: Vec2::ZERO,
+                acceleration: properties.ground_friction(),
             });
         }
         // Global stuff
@@ -205,12 +212,13 @@ fn compute_common_side_effects(
                 ev_facing.send(FacingUpdate(entity, Facing(facing.0.flip())));
             }
             (FighterState::Airdodge, AIRDODGE_DURATION_FRAMES) => {
+                ev_set_velocity.send(SetVelocity(entity, Vec2::ZERO));
                 ev_state.send(FighterStateUpdate(entity, FighterState::IdleAirborne));
             }
             (FighterState::RunEnd, 2) => {
                 ev_state.send(FighterStateUpdate(entity, FighterState::Idle));
             }
-            (FighterState::Airdodge, 0) => {
+            (FighterState::Airdodge, 1) => {
                 let control = if control.stick.length() > crate::CONTROL_STICK_DEADZONE {
                     control.stick.normalize_or_zero()
                 } else {
@@ -218,20 +226,8 @@ fn compute_common_side_effects(
                 };
                 ev_set_velocity.send(SetVelocity(entity, control * AIRDODGE_INITIAL_SPEED));
             }
-            (FighterState::Airdodge, _) if v.0.length() > 0.0 => {
-                let speed_reduction_per_frame =
-                    AIRDODGE_INITIAL_SPEED / (AIRDODGE_DURATION_FRAMES as f32);
-                if v.0.length() <= speed_reduction_per_frame {
-                    ev_set_velocity.send(SetVelocity(entity, Vec2::ZERO));
-                } else {
-                    ev_add_velocity.send(AddVelocity(
-                        entity,
-                        -v.0.normalize() * speed_reduction_per_frame,
-                    ));
-                }
-            }
             (FighterState::Dash, 0) => {
-                let dv_x = control.stick.x.signum() * sm.dash_speed();
+                let dv_x = control.stick.x.signum() * properties.dash_speed();
                 ev_set_velocity.send(SetVelocity(entity, Vec2::new(0.0, dv_x)));
             }
             _ => {}
@@ -281,7 +277,9 @@ fn remove_intangible(
 ) {
     for (entity, state, frame) in query.iter() {
         if !state.is_intangible(&frame.0) {
-            commands.entity(entity).remove::<Intangible>();
+            commands
+                .entity(entity)
+                .remove::<Intangible>();
         }
     }
 }
@@ -292,7 +290,9 @@ fn add_intangible(
 ) {
     for (entity, state, frame) in query.iter() {
         if state.is_intangible(&frame.0) {
-            commands.entity(entity).insert(Intangible);
+            commands
+                .entity(entity)
+                .insert(Intangible);
         }
     }
 }
@@ -302,8 +302,25 @@ pub struct FacingUpdate(Entity, Facing);
 
 fn update_facing(mut updates: EventReader<FacingUpdate>, mut commands: Commands) {
     for update in updates.read() {
-        commands.entity(update.0).insert(update.1);
+        commands
+            .entity(update.0)
+            .insert(update.1);
     }
+}
+
+fn update_gravity(
+    mut commands: Commands,
+    q: Query<(Entity, &FighterState, One<&dyn FighterProperties>)>,
+) {
+    q.iter().for_each(|(e, s, p)| {
+        if s.is_affected_by_gravity() {
+            commands
+                .entity(e)
+                .insert(Gravity(p.gravity()));
+        } else {
+            commands.entity(e).remove::<Gravity>();
+        }
+    })
 }
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
@@ -327,6 +344,7 @@ impl Plugin for FighterPlugin {
                         land,
                         go_airborne,
                         update_fighter_state,
+                        update_gravity,
                         update_facing,
                         remove_intangible,
                         add_intangible,
@@ -354,7 +372,6 @@ pub struct FighterBundle {
     pub facing: Facing,
     pub position: Position,
     pub velocity: Velocity,
-    pub gravity: Gravity,
     pub state: FighterState,
     pub sprite_sheet_bundle: SpriteSheetBundle,
     pub animation_indices: AnimationIndices,

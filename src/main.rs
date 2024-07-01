@@ -16,13 +16,12 @@ use utils::{Facing, FrameCount, FrameNumber, LeftRight};
 use view::*;
 
 const FRAMES_PER_SECOND: FrameNumber = 60;
-const GRAVITY: f32 = -0.3;
 const CONTROL_STICK_DEADZONE: f32 = 0.8;
 
 fn main() {
     debug!("Starting...");
     App::new()
-        .add_plugins(
+        .add_plugins((
             DefaultPlugins
                 .set(ImagePlugin::default_nearest())
                 .set(LogPlugin {
@@ -30,13 +29,10 @@ fn main() {
                     filter: "fighter_platformer=debug".to_string(),
                     update_subscriber: None,
                 }),
-        )
-        // we want Bevy to measure these values for us:
-        .add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin)
-        .add_plugins(bevy::diagnostic::EntityCountDiagnosticsPlugin)
-        .add_plugins(bevy::diagnostic::SystemInformationDiagnosticsPlugin)
-        .add_plugins(PerfUiPlugin)
-        .add_plugins((
+            bevy::diagnostic::FrameTimeDiagnosticsPlugin,
+            bevy::diagnostic::EntityCountDiagnosticsPlugin,
+            bevy::diagnostic::SystemInformationDiagnosticsPlugin,
+            PerfUiPlugin,
             input::InputPlugin,
             view::ViewPlugin,
             fighter::FighterPlugin,
@@ -55,9 +51,11 @@ fn main() {
 }
 
 fn increment_frame_number(mut query: Query<&mut FrameCount>) {
-    query.iter_mut().for_each(|mut frame_count| {
-        frame_count.0 += 1;
-    });
+    query
+        .iter_mut()
+        .for_each(|mut frame_count| {
+            frame_count.0 += 1;
+        });
 }
 
 fn setup(
@@ -98,7 +96,6 @@ fn setup(
             facing: Facing(LeftRight::Right),
             position: Position::default(),
             velocity: Velocity(Vec2::new(5.0, 0.0)),
-            gravity: Gravity(GRAVITY),
             state: fighter::FighterState::default(),
             sprite_sheet_bundle,
             animation_indices,
