@@ -10,7 +10,7 @@ mod physics;
 mod utils;
 mod view;
 
-use fighter::{megaman::MegaMan, FighterBundle, FighterEventSet, FighterSet, Player as PlayerId};
+use fighter::{megaman::MegaMan, FighterBundle, FighterEventSet, Player as PlayerId};
 use physics::*;
 use utils::{Facing, FrameCount, FrameNumber, LeftRight};
 use view::*;

@@ -1,4 +1,4 @@
-use bevy::{input::gamepad::*, prelude::*, utils::petgraph::matrix_graph::Zero};
+use bevy::{input::gamepad::*, prelude::*};
 use enumset::{EnumSet, EnumSetType};
 use std::collections::HashMap;
 
@@ -96,7 +96,7 @@ fn update_control_state(
                     .next()
                 {
                     if let Some(action) = mapping.map_button(&event.button_type) {
-                        if event.value.is_zero() {
+                        if event.value == 0.0 {
                             control.held_actions.remove(action);
                         } else {
                             control.held_actions.insert(action);
@@ -123,6 +123,17 @@ fn age_buffer(mut q: Query<(Entity, &mut Buffer)>, mut commands: Commands) {
             commands.entity(e).remove::<Buffer>();
         }
     }
+}
+
+#[derive(Event)]
+pub struct ClearBuffer(Entity);
+
+fn consume_buffer(mut ev: EventReader<ClearBuffer>, mut commands: Commands) {
+    ev.read()
+        .map(|event| event.0)
+        .for_each(|e| {
+            commands.entity(e).remove::<Buffer>();
+        });
 }
 
 #[derive(Event, Debug)]
@@ -182,6 +193,7 @@ impl Plugin for InputPlugin {
         app.add_systems(
             FixedUpdate,
             (
+                consume_buffer,
                 (update_control_state, buffer_actions),
                 age_buffer,
                 emit_action_events,
