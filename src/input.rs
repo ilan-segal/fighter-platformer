@@ -1,10 +1,13 @@
-use bevy::{input::gamepad::*, prelude::*};
+use bevy::{
+    input::{gamepad::*, keyboard::*},
+    prelude::*,
+};
 use enumset::{EnumSet, EnumSetType};
 use std::collections::HashMap;
 
 use crate::{fighter::Player, utils::FrameNumber};
 
-const BUFFER_SIZE: FrameNumber = 4;
+const BUFFER_SIZE: FrameNumber = 16;
 
 #[derive(EnumSetType, Debug)]
 pub enum Action {
@@ -25,20 +28,14 @@ pub struct Control {
 #[derive(Component)]
 pub struct GamepadButtonMapping(HashMap<GamepadButtonType, Action>);
 
-trait ButtonMapper {
-    fn map_button(&self, button: &GamepadButtonType) -> Option<Action>;
+trait ButtonMapper<T> {
+    fn map_button(&self, button: &T) -> Option<Action>;
 }
 
-impl ButtonMapper for GamepadButtonMapping {
-    fn map_button(&self, button: &GamepadButtonType) -> Option<Action> {
-        self.0.get(button).copied()
-    }
-}
-
-impl ButtonMapper for Option<&GamepadButtonMapping> {
+impl ButtonMapper<GamepadButtonType> for Option<&GamepadButtonMapping> {
     fn map_button(&self, button: &GamepadButtonType) -> Option<Action> {
         if let Some(mapping) = self {
-            return mapping.map_button(button);
+            return mapping.0.get(button).copied();
         }
         match button {
             GamepadButtonType::North | GamepadButtonType::West => Some(Action::Jump),
@@ -59,7 +56,22 @@ impl ButtonMapper for Option<&GamepadButtonMapping> {
     }
 }
 
-fn update_control_state(
+#[derive(Component)]
+pub struct KeyboardButtonMapping(HashMap<KeyCode, Action>);
+
+impl ButtonMapper<KeyCode> for Option<&KeyboardButtonMapping> {
+    fn map_button(&self, button: &KeyCode) -> Option<Action> {
+        if let Some(mapping) = self {
+            return mapping.0.get(button).copied();
+        }
+        match button {
+            KeyCode::Space => Some(Action::Jump),
+            _ => None,
+        }
+    }
+}
+
+fn update_control_state_from_gamepad(
     mut ev_gamepad: EventReader<GamepadEvent>,
     mut control: Query<(&Player, &mut Control, Option<&GamepadButtonMapping>)>,
 ) {
@@ -110,6 +122,35 @@ fn update_control_state(
     }
 }
 
+fn update_control_state_from_keyboard(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut control: Query<(
+        Entity,
+        &Player,
+        &mut Control,
+        Option<&KeyboardButtonMapping>,
+    )>,
+    mut commands: Commands,
+) {
+    if let Ok((e, _, mut control, mapping)) = control.get_single_mut() {
+        keyboard
+            .get_just_pressed()
+            .filter_map(|k| mapping.map_button(k))
+            .for_each(|action| {
+                control.held_actions.insert(action);
+                debug!("{:?}", control);
+                commands.entity(e).insert(Buffer { action, age: 0 });
+            });
+        keyboard
+            .get_just_released()
+            .filter_map(|k| mapping.map_button(k))
+            .for_each(|action| {
+                control.held_actions.remove(action);
+                debug!("{:?}", control);
+            })
+    }
+}
+
 #[derive(Component)]
 pub struct Buffer {
     pub action: Action,
@@ -129,17 +170,16 @@ fn age_buffer(mut q: Query<(Entity, &mut Buffer)>, mut commands: Commands) {
 pub struct ClearBuffer(pub Entity);
 
 fn consume_buffer(mut ev: EventReader<ClearBuffer>, mut commands: Commands) {
-    ev.read()
-        .map(|event| event.0)
-        .for_each(|e| {
-            commands.entity(e).remove::<Buffer>();
-        });
+    ev.read().map(|event| event.0).for_each(|e| {
+        commands.entity(e).remove::<Buffer>();
+        debug!("Removed buffer for {:?}", e);
+    });
 }
 
 #[derive(Event, Debug)]
 pub struct ActionEvent(pub Entity, pub Action);
 
-fn buffer_actions(
+fn buffer_actions_from_gamepad(
     mut commands: Commands,
     mut ev_gamepad: EventReader<GamepadEvent>,
     player: Query<(Entity, &Player, Option<&GamepadButtonMapping>)>,
@@ -162,15 +202,11 @@ fn buffer_actions(
             .iter()
             .filter(|(_, p, _)| p.0 == player_id)
             .filter_map(|(e, _, mapping)| {
-                mapping
-                    .map_button(&button_type)
-                    .map(|action| (e, action))
+                mapping.map_button(&button_type).map(|action| (e, action))
             })
             .next()
         {
-            commands
-                .entity(e)
-                .insert(Buffer { action, age: 0 });
+            commands.entity(e).insert(Buffer { action, age: 0 });
         }
     }
 }
@@ -192,14 +228,17 @@ impl Plugin for InputPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.add_systems(
             FixedUpdate,
-            (
-                consume_buffer,
-                (update_control_state, buffer_actions),
-                age_buffer,
-                emit_action_events,
-            )
+            (consume_buffer, age_buffer, emit_action_events)
                 .chain()
                 .in_set(InputSet),
+        )
+        .add_systems(
+            Update,
+            (
+                update_control_state_from_gamepad,
+                update_control_state_from_keyboard,
+                buffer_actions_from_gamepad,
+            ),
         )
         .add_event::<ActionEvent>()
         .add_event::<ClearBuffer>();
