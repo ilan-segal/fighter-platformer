@@ -126,7 +126,7 @@ fn age_buffer(mut q: Query<(Entity, &mut Buffer)>, mut commands: Commands) {
 }
 
 #[derive(Event)]
-pub struct ClearBuffer(Entity);
+pub struct ClearBuffer(pub Entity);
 
 fn consume_buffer(mut ev: EventReader<ClearBuffer>, mut commands: Commands) {
     ev.read()
@@ -151,7 +151,7 @@ fn buffer_actions(
             _ => None,
         })
         .filter_map(|event| {
-            if event.value < 1.0 {
+            if event.value == 0.0 {
                 None
             } else {
                 Some((event.gamepad.id, event.button_type))
@@ -201,6 +201,7 @@ impl Plugin for InputPlugin {
                 .chain()
                 .in_set(InputSet),
         )
-        .add_event::<ActionEvent>();
+        .add_event::<ActionEvent>()
+        .add_event::<ClearBuffer>();
     }
 }

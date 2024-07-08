@@ -3,7 +3,7 @@ use bevy::prelude::*;
 
 use crate::{
     fighter::{FighterEventSet, FighterStateUpdate},
-    input::{Action, ActionEvent},
+    input::{Action, ActionEvent, ClearBuffer},
     utils::{FrameCount, FrameNumber},
     AnimationIndices, AnimationUpdate, AnimationUpdateEvent, Velocity,
 };
@@ -91,12 +91,14 @@ fn consome_action_events(
     q: Query<(Entity, &FighterState), With<MegaMan>>,
     mut ev_action: EventReader<ActionEvent>,
     mut ev_state: EventWriter<FighterStateUpdate>,
+    mut ev_buffer_clear: EventWriter<ClearBuffer>,
 ) {
     for event in ev_action.read() {
         debug!("{:?}", event);
         if let Ok((e, state)) = q.get(event.0) {
             if let Some(new_state) = get_action_transition(&state, &event.1) {
                 ev_state.send(FighterStateUpdate(e, new_state));
+                ev_buffer_clear.send(ClearBuffer(e));
             }
         }
     }
