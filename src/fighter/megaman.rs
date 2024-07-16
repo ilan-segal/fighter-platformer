@@ -8,7 +8,7 @@ use crate::{
     AnimationIndices, AnimationUpdate, AnimationUpdateEvent, Velocity,
 };
 
-const LANDING_LAG: FrameNumber = 12;
+const LANDING_LAG: FrameNumber = 6;
 const IDLE_CYCLE: FrameNumber = 240;
 const JUMPSQUAT: FrameNumber = 4;
 const FRICTION: f32 = 0.3;
@@ -60,8 +60,11 @@ impl FighterProperties for MegaMan {
     fn animation_for_state(&self, state: &FighterState) -> Option<AnimationUpdate> {
         match state {
             FighterState::Idle => Some(AnimationUpdate::SingleFrame(0)),
-            FighterState::LandCrouch => Some(AnimationUpdate::SingleFrame(133)),
-            FighterState::JumpSquat => Some(AnimationUpdate::SingleFrame(133)),
+            FighterState::JumpSquat
+            | FighterState::LandCrouch
+            | FighterState::EnterCrouch
+            | FighterState::ExitCrouch => Some(AnimationUpdate::SingleFrame(133)),
+            FighterState::Crouch => Some(AnimationUpdate::SingleFrame(134)),
             FighterState::Walk => Some(AnimationUpdate::MultiFrame {
                 indices: AnimationIndices { first: 5, last: 14 },
                 seconds_per_frame: 0.1,
@@ -106,7 +109,10 @@ fn consome_action_events(
 
 fn get_action_transition(state: &FighterState, action: &Action) -> Option<FighterState> {
     match (state, action) {
-        (FighterState::Idle, Action::Jump) => Some(FighterState::JumpSquat),
+        (FighterState::Idle, Action::Jump)
+        | (FighterState::Crouch, Action::Jump)
+        | (FighterState::EnterCrouch, Action::Jump)
+        | (FighterState::ExitCrouch, Action::Jump) => Some(FighterState::JumpSquat),
         (FighterState::IdleAirborne, Action::Shield) => Some(FighterState::Airdodge),
         (FighterState::JumpSquat, Action::Shield) => Some(FighterState::Airdodge),
         _ => None,

@@ -19,6 +19,10 @@ const TURNAROUND_DURATION_FRAMES: FrameNumber = 14;
 const TURNAROUND_THRESHOLD_FRAME: FrameNumber = TURNAROUND_DURATION_FRAMES / 2;
 const RUN_TURNAROUND_DURATION_FRAMES: FrameNumber = 14;
 const RUN_TURNAROUND_THRESHOLD_FRAME: FrameNumber = TURNAROUND_DURATION_FRAMES / 2;
+const CROUCH_TRANSITION_THRESHOLD_FRAME: FrameNumber = 6;
+
+// Control thresholds
+const CROUCH_THRESHOLD: f32 = 0.3;
 
 #[derive(Component)]
 pub struct Player(pub usize);
@@ -27,6 +31,9 @@ pub struct Player(pub usize);
 pub enum FighterState {
     #[default]
     Idle,
+    Crouch,
+    EnterCrouch,
+    ExitCrouch,
     Turnaround,
     RunTurnaround,
     LandCrouch,
@@ -59,7 +66,10 @@ impl FighterState {
             | Self::RunTurnaround
             | Self::RunEnd
             | Self::Dash
-            | Self::Run => true,
+            | Self::Run
+            | Self::Crouch
+            | Self::EnterCrouch
+            | Self::ExitCrouch => true,
             _ => false,
         }
     }
@@ -195,6 +205,14 @@ fn compute_common_side_effects(
                 };
                 ev_add_velocity.send(AddVelocity(entity, Vec2::new(0.0, jump_speed)));
             }
+            FighterState::Idle | FighterState::LandCrouch
+                if control.stick.y < -CROUCH_THRESHOLD =>
+            {
+                ev_state.send(FighterStateUpdate(entity, FighterState::EnterCrouch));
+            }
+            FighterState::Crouch if control.stick.y >= -CROUCH_THRESHOLD => {
+                ev_state.send(FighterStateUpdate(entity, FighterState::ExitCrouch));
+            }
             _ => {}
         }
         if state.is_grounded() {
@@ -232,6 +250,12 @@ fn compute_common_side_effects(
             (FighterState::Dash, 0) => {
                 let dv_x = control.stick.x.signum() * properties.dash_speed();
                 ev_set_velocity.send(SetVelocity(entity, Vec2::new(0.0, dv_x)));
+            }
+            (FighterState::EnterCrouch, CROUCH_TRANSITION_THRESHOLD_FRAME) => {
+                ev_state.send(FighterStateUpdate(entity, FighterState::Crouch));
+            }
+            (FighterState::ExitCrouch, CROUCH_TRANSITION_THRESHOLD_FRAME) => {
+                ev_state.send(FighterStateUpdate(entity, FighterState::Idle));
             }
             _ => {}
         }
