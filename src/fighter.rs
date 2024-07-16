@@ -177,11 +177,17 @@ fn compute_common_side_effects(
                 ev_state.send(FighterStateUpdate(entity, FighterState::Run));
             }
             FighterState::JumpSquat if frame.0 == properties.jumpsquat() => {
-                if control.held_actions.contains(Action::Shield) {
+                if control
+                    .held_actions
+                    .contains(Action::Shield)
+                {
                     ev_state.send(FighterStateUpdate(entity, FighterState::Airdodge));
                     return;
                 }
-                let jump_speed = if control.held_actions.contains(Action::Jump) {
+                let jump_speed = if control
+                    .held_actions
+                    .contains(Action::Jump)
+                {
                     properties.jump_speed()
                 } else {
                     // Short-hop, half the max-height of a full-hop
@@ -216,11 +222,7 @@ fn compute_common_side_effects(
                 ev_state.send(FighterStateUpdate(entity, FighterState::Idle));
             }
             (FighterState::Airdodge, 1) => {
-                let control = if control.stick.length() > crate::CONTROL_STICK_DEADZONE {
-                    control.stick.normalize_or_zero()
-                } else {
-                    Vec2::ZERO
-                };
+                let control = control.stick.normalize_or_zero();
                 ev_set_velocity.send(SetVelocity(entity, control * AIRDODGE_INITIAL_SPEED));
             }
             (FighterState::Airdodge, AIRDODGE_DURATION_FRAMES) => {
@@ -278,7 +280,9 @@ fn remove_intangible(
 ) {
     for (entity, state, frame) in query.iter() {
         if !state.is_intangible(&frame.0) {
-            commands.entity(entity).remove::<Intangible>();
+            commands
+                .entity(entity)
+                .remove::<Intangible>();
         }
     }
 }
@@ -289,7 +293,9 @@ fn add_intangible(
 ) {
     for (entity, state, frame) in query.iter() {
         if state.is_intangible(&frame.0) {
-            commands.entity(entity).insert(Intangible);
+            commands
+                .entity(entity)
+                .insert(Intangible);
         }
     }
 }
@@ -299,7 +305,9 @@ pub struct FacingUpdate(Entity, Facing);
 
 fn update_facing(mut updates: EventReader<FacingUpdate>, mut commands: Commands) {
     for update in updates.read() {
-        commands.entity(update.0).insert(update.1);
+        commands
+            .entity(update.0)
+            .insert(update.1);
     }
 }
 
@@ -309,7 +317,9 @@ fn update_gravity(
 ) {
     q.iter().for_each(|(e, s, p)| {
         if s.is_affected_by_gravity() {
-            commands.entity(e).insert(Gravity(p.gravity()));
+            commands
+                .entity(e)
+                .insert(Gravity(p.gravity()));
         } else {
             commands.entity(e).remove::<Gravity>();
         }

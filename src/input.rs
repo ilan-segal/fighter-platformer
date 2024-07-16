@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use crate::{fighter::Player, utils::FrameNumber};
 
 const BUFFER_SIZE: FrameNumber = 16;
+const CONTROL_STICK_DEADZONE: f32 = 0.8;
 
 #[derive(EnumSetType, Debug)]
 pub enum Action {
@@ -139,7 +140,9 @@ fn update_control_state_from_keyboard(
             .for_each(|action| {
                 control.held_actions.insert(action);
                 debug!("{:?}", control);
-                commands.entity(e).insert(Buffer { action, age: 0 });
+                commands
+                    .entity(e)
+                    .insert(Buffer { action, age: 0 });
             });
         keyboard
             .get_just_released()
@@ -170,10 +173,12 @@ fn age_buffer(mut q: Query<(Entity, &mut Buffer)>, mut commands: Commands) {
 pub struct ClearBuffer(pub Entity);
 
 fn consume_buffer(mut ev: EventReader<ClearBuffer>, mut commands: Commands) {
-    ev.read().map(|event| event.0).for_each(|e| {
-        commands.entity(e).remove::<Buffer>();
-        debug!("Removed buffer for {:?}", e);
-    });
+    ev.read()
+        .map(|event| event.0)
+        .for_each(|e| {
+            commands.entity(e).remove::<Buffer>();
+            debug!("Removed buffer for {:?}", e);
+        });
 }
 
 #[derive(Event, Debug)]
@@ -202,11 +207,15 @@ fn buffer_actions_from_gamepad(
             .iter()
             .filter(|(_, p, _)| p.0 == player_id)
             .filter_map(|(e, _, mapping)| {
-                mapping.map_button(&button_type).map(|action| (e, action))
+                mapping
+                    .map_button(&button_type)
+                    .map(|action| (e, action))
             })
             .next()
         {
-            commands.entity(e).insert(Buffer { action, age: 0 });
+            commands
+                .entity(e)
+                .insert(Buffer { action, age: 0 });
         }
     }
 }
@@ -218,6 +227,14 @@ fn emit_action_events(mut ev_action: EventWriter<ActionEvent>, player: Query<(En
         .for_each(|event| {
             ev_action.send(event);
         });
+}
+
+fn apply_deadzone(mut q: Query<&mut Control>) {
+    for mut c in q.iter_mut() {
+        if c.stick.length() < CONTROL_STICK_DEADZONE {
+            c.stick = Vec2::ZERO;
+        }
+    }
 }
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
@@ -235,8 +252,12 @@ impl Plugin for InputPlugin {
         .add_systems(
             Update,
             (
-                update_control_state_from_gamepad,
-                update_control_state_from_keyboard,
+                (
+                    update_control_state_from_gamepad,
+                    update_control_state_from_keyboard,
+                    apply_deadzone,
+                )
+                    .chain(),
                 buffer_actions_from_gamepad,
             ),
         )
