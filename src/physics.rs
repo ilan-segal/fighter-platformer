@@ -28,7 +28,7 @@ fn set_velocity(mut ev_add_velocity: EventReader<SetVelocity>, mut query: Query<
     }
 }
 
-#[derive(Event)]
+#[derive(Event, Debug)]
 pub struct AccelerateTowards {
     pub entity: Entity,
     pub target: Vec2,

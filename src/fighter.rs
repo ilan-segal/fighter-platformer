@@ -4,7 +4,7 @@ use bevy_trait_query::One;
 use crate::{
     input::{Action, Control},
     physics::{AddVelocity, Collision, Gravity, Position, SetVelocity, Velocity},
-    utils::{FrameCount, FrameNumber},
+    utils::{FrameCount, FrameNumber, LeftRight},
     AccelerateTowards, Airborne, AnimationIndices, AnimationTimer, AnimationUpdate,
     AnimationUpdateEvent, Facing,
 };
@@ -15,14 +15,14 @@ const AIRDODGE_INITIAL_SPEED: f32 = 10.0;
 const AIRDODGE_DURATION_FRAMES: FrameNumber = 15;
 const AIRDODGE_INTANGIBLE_START: FrameNumber = 4;
 const AIRDODGE_INTANGIBLE_END: FrameNumber = 15;
-const TURNAROUND_DURATION_FRAMES: FrameNumber = 14;
+const TURNAROUND_DURATION_FRAMES: FrameNumber = 7;
 const TURNAROUND_THRESHOLD_FRAME: FrameNumber = TURNAROUND_DURATION_FRAMES / 2;
 const RUN_TURNAROUND_DURATION_FRAMES: FrameNumber = 14;
 const RUN_TURNAROUND_THRESHOLD_FRAME: FrameNumber = TURNAROUND_DURATION_FRAMES / 2;
 const CROUCH_TRANSITION_THRESHOLD_FRAME: FrameNumber = 6;
 
 // Control thresholds
-const CROUCH_THRESHOLD: f32 = 0.3;
+const CROUCH_THRESHOLD: f32 = 0.4;
 
 #[derive(Component)]
 pub struct Player(pub usize);
@@ -212,6 +212,33 @@ fn compute_common_side_effects(
             }
             FighterState::Crouch if control.stick.y >= -CROUCH_THRESHOLD => {
                 ev_state.send(FighterStateUpdate(entity, FighterState::ExitCrouch));
+            }
+            FighterState::Idle if control.stick.x.abs() > 0.1 => {
+                let control_direction = if control.stick.x < 0.0 {
+                    LeftRight::Left
+                } else {
+                    LeftRight::Right
+                };
+                if control_direction == facing.0 {
+                    ev_state.send(FighterStateUpdate(entity, FighterState::Walk));
+                } else {
+                    ev_state.send(FighterStateUpdate(entity, FighterState::Turnaround));
+                }
+            }
+            FighterState::Walk => {
+                if control.stick.x == 0.0 {
+                    ev_state.send(FighterStateUpdate(entity, FighterState::Idle));
+                } else if LeftRight::from_axis(control.stick.x) != facing.0 {
+                    ev_state.send(FighterStateUpdate(entity, FighterState::Turnaround));
+                } else {
+                    let target = Vec2::new(control.stick.x, 0.0) * properties.walk_speed();
+                    ev_accelerate.send(AccelerateTowards {
+                        entity,
+                        target,
+                        // To overcome friction, multiply by 2
+                        acceleration: properties.ground_friction() * 2.0,
+                    });
+                }
             }
             _ => {}
         }

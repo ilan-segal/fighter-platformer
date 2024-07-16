@@ -19,6 +19,14 @@ impl LeftRight {
             LeftRight::Right => LeftRight::Left,
         }
     }
+
+    pub fn from_axis(x: f32) -> Self {
+        if x < 0.0 {
+            Self::Left
+        } else {
+            Self::Right
+        }
+    }
 }
 
 #[derive(Component, Clone, Copy)]

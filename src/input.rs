@@ -8,7 +8,8 @@ use std::collections::HashMap;
 use crate::{fighter::Player, utils::FrameNumber};
 
 const BUFFER_SIZE: FrameNumber = 16;
-const CONTROL_STICK_DEADZONE: f32 = 0.8;
+const CONTROL_STICK_DEADZONE_SIZE: f32 = 0.5;
+const CONTROL_STICK_LIVEZONE_SIZE: f32 = 1.0 - CONTROL_STICK_DEADZONE_SIZE;
 
 #[derive(EnumSetType, Debug)]
 pub enum Action {
@@ -57,9 +58,6 @@ impl ButtonMapper<GamepadButtonType> for Option<&GamepadButtonMapping> {
     }
 }
 
-#[derive(Component)]
-pub struct KeyboardButtonMapping(HashMap<KeyCode, Action>);
-
 impl ButtonMapper<KeyCode> for Option<&KeyboardButtonMapping> {
     fn map_button(&self, button: &KeyCode) -> Option<Action> {
         if let Some(mapping) = self {
@@ -72,56 +70,70 @@ impl ButtonMapper<KeyCode> for Option<&KeyboardButtonMapping> {
     }
 }
 
+fn get_clamped_control_stick(x: f32, y: f32) -> Vec2 {
+    if x == 0.0 && y == 0.0 {
+        return Vec2::ZERO;
+    }
+    let length = (x * x + y * y).sqrt();
+    if length < CONTROL_STICK_DEADZONE_SIZE {
+        return Vec2::ZERO;
+    }
+    let length_outsize_deadzone = length - CONTROL_STICK_DEADZONE_SIZE;
+    let adjusted_length = (length_outsize_deadzone / CONTROL_STICK_LIVEZONE_SIZE).clamp(0.0, 1.0);
+    return Vec2::new(x, y) / length * adjusted_length;
+}
+
 fn update_control_state_from_gamepad(
-    mut ev_gamepad: EventReader<GamepadEvent>,
+    gamepads: Res<Gamepads>,
+    axes: Res<Axis<GamepadAxis>>,
+    buttons: Res<ButtonInput<GamepadButton>>,
     mut control: Query<(&Player, &mut Control, Option<&GamepadButtonMapping>)>,
 ) {
-    for ev in ev_gamepad.read() {
-        match ev {
-            GamepadEvent::Axis(GamepadAxisChangedEvent {
-                axis_type,
-                value,
-                gamepad,
-            }) => {
-                let id = gamepad.id;
-                if let Some((_, mut control, _)) = control
-                    .iter_mut()
-                    .filter(|(player, ..)| player.0 == id)
-                    .next()
-                {
-                    match axis_type {
-                        GamepadAxisType::LeftStickX => {
-                            control.stick.x = *value;
-                        }
-                        GamepadAxisType::LeftStickY => {
-                            control.stick.y = *value;
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            GamepadEvent::Button(event) => {
-                debug!("Button event: {:?}", event);
-                let id = event.gamepad.id;
-                if let Some((_, mut control, mapping)) = control
-                    .iter_mut()
-                    .filter(|(player, ..)| player.0 == id)
-                    .next()
-                {
-                    if let Some(action) = mapping.map_button(&event.button_type) {
-                        if event.value == 0.0 {
-                            control.held_actions.remove(action);
-                        } else {
-                            control.held_actions.insert(action);
-                        }
-                    }
-                    debug!("{:?}", control);
-                }
-            }
-            _ => {}
+    for (p, mut control, mapping) in control.iter_mut() {
+        // Get gamepad for player
+        let Some(gamepad) = gamepads
+            .iter()
+            .filter(|g| g.id == p.0)
+            .next()
+        else {
+            continue;
+        };
+
+        // Update control stick
+        let axis_lx = GamepadAxis {
+            gamepad,
+            axis_type: GamepadAxisType::LeftStickX,
+        };
+        let axis_ly = GamepadAxis {
+            gamepad,
+            axis_type: GamepadAxisType::LeftStickY,
+        };
+        if let (Some(x), Some(y)) = (axes.get(axis_lx), axes.get(axis_ly)) {
+            control.stick = get_clamped_control_stick(x, y);
+        }
+
+        // Update buttons
+        for action in buttons
+            .get_just_pressed()
+            .filter(|gamepad_button| gamepad_button.gamepad.id == gamepad.id)
+            .map(|gamepad_button| gamepad_button.button_type)
+            .filter_map(|button| mapping.map_button(&button))
+        {
+            control.held_actions.insert(action);
+        }
+        for action in buttons
+            .get_just_released()
+            .filter(|gamepad_button| gamepad_button.gamepad.id == gamepad.id)
+            .map(|gamepad_button| gamepad_button.button_type)
+            .filter_map(|button| mapping.map_button(&button))
+        {
+            control.held_actions.remove(action);
         }
     }
 }
+
+#[derive(Component)]
+pub struct KeyboardButtonMapping(HashMap<KeyCode, Action>);
 
 fn update_control_state_from_keyboard(
     keyboard: Res<ButtonInput<KeyCode>>,
@@ -229,14 +241,6 @@ fn emit_action_events(mut ev_action: EventWriter<ActionEvent>, player: Query<(En
         });
 }
 
-fn apply_deadzone(mut q: Query<&mut Control>) {
-    for mut c in q.iter_mut() {
-        if c.stick.length() < CONTROL_STICK_DEADZONE {
-            c.stick = Vec2::ZERO;
-        }
-    }
-}
-
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InputSet;
 
@@ -252,12 +256,8 @@ impl Plugin for InputPlugin {
         .add_systems(
             Update,
             (
-                (
-                    update_control_state_from_gamepad,
-                    update_control_state_from_keyboard,
-                    apply_deadzone,
-                )
-                    .chain(),
+                update_control_state_from_gamepad,
+                update_control_state_from_keyboard,
                 buffer_actions_from_gamepad,
             ),
         )
