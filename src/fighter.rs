@@ -73,6 +73,14 @@ impl FighterState {
             _ => false,
         }
     }
+    fn has_neutral_friction(&self) -> bool {
+        match self {
+            Self::Idle | Self::LandCrouch | Self::Crouch | Self::EnterCrouch | Self::ExitCrouch => {
+                true
+            }
+            _ => false,
+        }
+    }
     fn is_affected_by_gravity(&self) -> bool {
         match self {
             Self::Airdodge => false,
@@ -235,14 +243,13 @@ fn compute_common_side_effects(
                     ev_accelerate.send(AccelerateTowards {
                         entity,
                         target,
-                        // To overcome friction, multiply by 2
-                        acceleration: properties.ground_friction() * 2.0,
+                        acceleration: properties.ground_friction(),
                     });
                 }
             }
             _ => {}
         }
-        if state.is_grounded() {
+        if state.is_grounded() && state.has_neutral_friction() {
             ev_accelerate.send(AccelerateTowards {
                 entity,
                 target: Vec2::ZERO,

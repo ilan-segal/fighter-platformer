@@ -112,7 +112,9 @@ fn get_action_transition(state: &FighterState, action: &Action) -> Option<Fighte
         (FighterState::Idle, Action::Jump)
         | (FighterState::Crouch, Action::Jump)
         | (FighterState::EnterCrouch, Action::Jump)
-        | (FighterState::ExitCrouch, Action::Jump) => Some(FighterState::JumpSquat),
+        | (FighterState::ExitCrouch, Action::Jump)
+        | (FighterState::Walk, Action::Jump)
+        | (FighterState::Turnaround, Action::Jump) => Some(FighterState::JumpSquat),
         (FighterState::IdleAirborne, Action::Shield) => Some(FighterState::Airdodge),
         (FighterState::JumpSquat, Action::Shield) => Some(FighterState::Airdodge),
         _ => None,
