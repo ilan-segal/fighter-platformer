@@ -3,7 +3,7 @@ use bevy::prelude::*;
 
 use crate::{
     fighter::{FighterEventSet, FighterStateUpdate},
-    input::{Action, ActionEvent, ClearBuffer},
+    input::{Action, Buffer},
     utils::{FrameCount, FrameNumber},
     AnimationIndices, AnimationUpdate, AnimationUpdateEvent, Velocity,
 };
@@ -91,18 +91,24 @@ impl FighterProperties for MegaMan {
 // }
 
 fn consome_action_events(
-    q: Query<(Entity, &FighterState), With<MegaMan>>,
-    mut ev_action: EventReader<ActionEvent>,
+    q: Query<(Entity, &FighterState, &Buffer), With<MegaMan>>,
     mut ev_state: EventWriter<FighterStateUpdate>,
-    mut ev_buffer_clear: EventWriter<ClearBuffer>,
+    mut commands: Commands,
 ) {
-    for event in ev_action.read() {
-        debug!("{:?}", event);
-        if let Ok((e, state)) = q.get(event.0) {
-            if let Some(new_state) = get_action_transition(&state, &event.1) {
-                ev_state.send(FighterStateUpdate(e, new_state));
-                ev_buffer_clear.send(ClearBuffer(e));
-            }
+    // for event in ev_action.read() {
+    //     debug!("{:?}", event);
+    //     if let Ok((e, state)) = q.get(event.0) {
+    //         if let Some(new_state) = get_action_transition(&state, &event.1) {
+    //             ev_state.send(FighterStateUpdate(e, new_state));
+    //             ev_buffer_clear.send(ClearBuffer(e));
+    //         }
+    //     }
+    // }
+    for (e, state, buffer) in q.iter() {
+        debug!("{:?}", buffer);
+        if let Some(new_state) = get_action_transition(state, &buffer.action) {
+            ev_state.send(FighterStateUpdate(e, new_state));
+            commands.entity(e).remove::<Buffer>();
         }
     }
 }

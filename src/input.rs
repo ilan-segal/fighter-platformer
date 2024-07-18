@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use crate::{fighter::Player, utils::FrameNumber};
 
-const BUFFER_SIZE: FrameNumber = 16;
+const BUFFER_SIZE: FrameNumber = 8;
 const CONTROL_STICK_DEADZONE_SIZE: f32 = 0.5;
 const CONTROL_STICK_LIVEZONE_SIZE: f32 = 1.0 - CONTROL_STICK_DEADZONE_SIZE;
 
@@ -166,7 +166,7 @@ fn update_control_state_from_keyboard(
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct Buffer {
     pub action: Action,
     pub age: FrameNumber,
@@ -180,21 +180,6 @@ fn age_buffer(mut q: Query<(Entity, &mut Buffer)>, mut commands: Commands) {
         }
     }
 }
-
-#[derive(Event)]
-pub struct ClearBuffer(pub Entity);
-
-fn consume_buffer(mut ev: EventReader<ClearBuffer>, mut commands: Commands) {
-    ev.read()
-        .map(|event| event.0)
-        .for_each(|e| {
-            commands.entity(e).remove::<Buffer>();
-            debug!("Removed buffer for {:?}", e);
-        });
-}
-
-#[derive(Event, Debug)]
-pub struct ActionEvent(pub Entity, pub Action);
 
 fn buffer_actions_from_gamepad(
     mut commands: Commands,
@@ -232,36 +217,20 @@ fn buffer_actions_from_gamepad(
     }
 }
 
-fn emit_action_events(mut ev_action: EventWriter<ActionEvent>, player: Query<(Entity, &Buffer)>) {
-    player
-        .iter()
-        .map(|(entity, buffer)| ActionEvent(entity, buffer.action))
-        .for_each(|event| {
-            ev_action.send(event);
-        });
-}
-
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InputSet;
 
 pub struct InputPlugin;
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_systems(
-            FixedUpdate,
-            (consume_buffer, age_buffer, emit_action_events)
-                .chain()
-                .in_set(InputSet),
-        )
-        .add_systems(
-            Update,
-            (
-                update_control_state_from_gamepad,
-                update_control_state_from_keyboard,
-                buffer_actions_from_gamepad,
-            ),
-        )
-        .add_event::<ActionEvent>()
-        .add_event::<ClearBuffer>();
+        app.add_systems(FixedUpdate, age_buffer.in_set(InputSet))
+            .add_systems(
+                Update,
+                (
+                    update_control_state_from_gamepad,
+                    update_control_state_from_keyboard,
+                    buffer_actions_from_gamepad,
+                ),
+            );
     }
 }
