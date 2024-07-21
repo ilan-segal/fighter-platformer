@@ -3,13 +3,15 @@ use bevy::{
     prelude::*,
 };
 use enumset::{EnumSet, EnumSetType};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use crate::{fighter::Player, utils::FrameNumber};
 
 const BUFFER_SIZE: FrameNumber = 8;
 const CONTROL_STICK_DEADZONE_SIZE: f32 = 0.5;
 const CONTROL_STICK_LIVEZONE_SIZE: f32 = 1.0 - CONTROL_STICK_DEADZONE_SIZE;
+const SMASH_INPUT_MAX_DURATION: FrameNumber = 4;
+const SMASH_INPUT_THRESHOLD_DISTANCE_FROM_CENTRE: f32 = 0.99;
 
 #[derive(EnumSetType, Debug)]
 pub enum Action {
@@ -21,10 +23,11 @@ pub enum Action {
     Taunt,
 }
 
-#[derive(Component, Default, Clone, Copy, Debug)]
+#[derive(Component, Default, Debug)]
 pub struct Control {
     pub stick: Vec2,
     pub held_actions: EnumSet<Action>,
+    previous_stick_positions: VecDeque<Vec2>,
 }
 
 #[derive(Component)]
@@ -100,6 +103,15 @@ fn update_control_state_from_gamepad(
         };
 
         // Update control stick
+        let cur_stick = control.stick;
+        control
+            .previous_stick_positions
+            .push_back(cur_stick);
+        if control.previous_stick_positions.len() > SMASH_INPUT_MAX_DURATION {
+            control
+                .previous_stick_positions
+                .pop_front();
+        }
         let axis_lx = GamepadAxis {
             gamepad,
             axis_type: GamepadAxisType::LeftStickX,
@@ -109,7 +121,8 @@ fn update_control_state_from_gamepad(
             axis_type: GamepadAxisType::LeftStickY,
         };
         if let (Some(x), Some(y)) = (axes.get(axis_lx), axes.get(axis_ly)) {
-            control.stick = get_clamped_control_stick(x, y);
+            let clamped = get_clamped_control_stick(x, y);
+            control.stick = clamped;
         }
 
         // Update buttons
@@ -217,20 +230,77 @@ fn buffer_actions_from_gamepad(
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum DirectionalActionType {
+    Smash,
+    Clockwise,
+    CounterClockwise,
+}
+
+#[derive(Component, Debug)]
+pub struct DirectionalAction {
+    pub action_type: DirectionalActionType,
+    pub direction: Vec2,
+    age: FrameNumber,
+}
+
+fn age_directional_action(mut q: Query<(Entity, &mut DirectionalAction)>, mut commands: Commands) {
+    for (e, mut da) in q.iter_mut() {
+        da.age += 1;
+        if da.age >= BUFFER_SIZE {
+            commands
+                .entity(e)
+                .remove::<DirectionalAction>();
+        }
+    }
+}
+
+fn detect_smash_input(mut q: Query<(Entity, &mut Control)>, mut commands: Commands) {
+    for (e, mut c) in q.iter_mut() {
+        if c.stick.length() < SMASH_INPUT_THRESHOLD_DISTANCE_FROM_CENTRE {
+            continue;
+        }
+        let is_smash_input = c
+            .previous_stick_positions
+            .iter()
+            // Stick travelled at least half of the active zone
+            .any(|stick| (*stick - c.stick).length() >= 0.5);
+        if is_smash_input {
+            commands
+                .entity(e)
+                .insert(DirectionalAction {
+                    action_type: DirectionalActionType::Smash,
+                    direction: c.stick,
+                    age: 0,
+                });
+        } else {
+            // TODO: Other kinds of inputs
+            return;
+        }
+        // Remove all but the most recent position
+        c.previous_stick_positions.clear();
+    }
+}
+
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InputSet;
 
 pub struct InputPlugin;
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_systems(FixedUpdate, age_buffer.in_set(InputSet))
-            .add_systems(
-                Update,
-                (
-                    update_control_state_from_gamepad,
-                    update_control_state_from_keyboard,
-                    buffer_actions_from_gamepad,
-                ),
-            );
+        app.add_systems(
+            FixedUpdate,
+            ((age_buffer, age_directional_action), detect_smash_input)
+                .chain()
+                .in_set(InputSet),
+        )
+        .add_systems(
+            Update,
+            (
+                update_control_state_from_gamepad,
+                update_control_state_from_keyboard,
+                buffer_actions_from_gamepad,
+            ),
+        );
     }
 }

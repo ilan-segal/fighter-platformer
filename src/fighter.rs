@@ -2,9 +2,9 @@ use bevy::prelude::*;
 use bevy_trait_query::One;
 
 use crate::{
-    input::{Action, Control},
+    input::{Action, Control, DirectionalAction, DirectionalActionType},
     physics::{AddVelocity, Collision, Gravity, Position, SetVelocity, Velocity},
-    utils::{FrameCount, FrameNumber, LeftRight},
+    utils::{CardinalDirection, Directed, FrameCount, FrameNumber, LeftRight},
     AccelerateTowards, Airborne, AnimationIndices, AnimationTimer, AnimationUpdate,
     AnimationUpdateEvent, Facing,
 };
@@ -17,7 +17,7 @@ const AIRDODGE_INTANGIBLE_START: FrameNumber = 4;
 const AIRDODGE_INTANGIBLE_END: FrameNumber = 15;
 const TURNAROUND_DURATION_FRAMES: FrameNumber = 7;
 const TURNAROUND_THRESHOLD_FRAME: FrameNumber = TURNAROUND_DURATION_FRAMES / 2;
-const RUN_TURNAROUND_DURATION_FRAMES: FrameNumber = 14;
+const RUN_TURNAROUND_DURATION_FRAMES: FrameNumber = 8;
 const RUN_TURNAROUND_THRESHOLD_FRAME: FrameNumber = TURNAROUND_DURATION_FRAMES / 2;
 const CROUCH_TRANSITION_THRESHOLD_FRAME: FrameNumber = 6;
 
@@ -27,7 +27,7 @@ const CROUCH_THRESHOLD: f32 = 0.4;
 #[derive(Component)]
 pub struct Player(pub usize);
 
-#[derive(Component, Clone, Copy, Default, Debug)]
+#[derive(Component, Clone, Copy, Default, Debug, PartialEq, Eq)]
 pub enum FighterState {
     #[default]
     Idle,
@@ -175,14 +175,16 @@ fn compute_common_side_effects(
         &Facing,
         One<&dyn FighterProperties>,
         &Control,
+        Option<&DirectionalAction>,
     )>,
     mut ev_state: EventWriter<FighterStateUpdate>,
     mut ev_facing: EventWriter<FacingUpdate>,
     mut ev_accelerate: EventWriter<AccelerateTowards>,
     mut ev_add_velocity: EventWriter<AddVelocity>,
     mut ev_set_velocity: EventWriter<SetVelocity>,
+    mut commands: Commands,
 ) {
-    for (entity, state, frame, facing, properties, control) in &query {
+    for (entity, state, frame, facing, properties, control, directional_action) in &query {
         // Implementation-specific stuff
         match state {
             FighterState::LandCrouch if frame.0 == properties.land_crouch_duration() => {
@@ -221,12 +223,27 @@ fn compute_common_side_effects(
             FighterState::Crouch if control.stick.y >= -CROUCH_THRESHOLD => {
                 ev_state.send(FighterStateUpdate(entity, FighterState::ExitCrouch));
             }
+            FighterState::Idle
+            | FighterState::Turnaround
+            | FighterState::Walk
+            | FighterState::Dash
+                if let Some(d) = directional_action
+                    && d.action_type == DirectionalActionType::Smash
+                    && d.direction.is_sideways() =>
+            {
+                debug!("{:?}", d);
+                let direction = d.direction.get_sideways_direction();
+                if direction == facing.0 && *state == FighterState::Dash {
+                    return;
+                }
+                ev_state.send(FighterStateUpdate(entity, FighterState::Dash));
+                ev_facing.send(FacingUpdate(entity, Facing(direction)));
+                commands
+                    .entity(entity)
+                    .remove::<DirectionalAction>();
+            }
             FighterState::Idle if control.stick.x.abs() > 0.1 => {
-                let control_direction = if control.stick.x < 0.0 {
-                    LeftRight::Left
-                } else {
-                    LeftRight::Right
-                };
+                let control_direction = control.stick.get_sideways_direction();
                 if control_direction == facing.0 {
                     ev_state.send(FighterStateUpdate(entity, FighterState::Walk));
                 } else {
@@ -236,10 +253,27 @@ fn compute_common_side_effects(
             FighterState::Walk => {
                 if control.stick.x == 0.0 {
                     ev_state.send(FighterStateUpdate(entity, FighterState::Idle));
-                } else if LeftRight::from_axis(control.stick.x) != facing.0 {
+                } else if control.stick.get_sideways_direction() != facing.0 {
                     ev_state.send(FighterStateUpdate(entity, FighterState::Turnaround));
                 } else {
                     let target = Vec2::new(control.stick.x, 0.0) * properties.walk_speed();
+                    ev_accelerate.send(AccelerateTowards {
+                        entity,
+                        target,
+                        acceleration: properties.ground_friction(),
+                    });
+                }
+            }
+            FighterState::Run => {
+                if control.stick.x == 0.0 {
+                    ev_state.send(FighterStateUpdate(entity, FighterState::RunEnd));
+                } else if control.stick.get_cardinal_direction() == CardinalDirection::Down {
+                    ev_state.send(FighterStateUpdate(entity, FighterState::Crouch));
+                } else if control.stick.get_sideways_direction() != facing.0 {
+                    ev_state.send(FighterStateUpdate(entity, FighterState::RunTurnaround));
+                } else {
+                    let target =
+                        Vec2::new(control.stick.x, 0.0).normalize() * properties.dash_speed();
                     ev_accelerate.send(AccelerateTowards {
                         entity,
                         target,
@@ -270,8 +304,15 @@ fn compute_common_side_effects(
             (FighterState::RunTurnaround, RUN_TURNAROUND_THRESHOLD_FRAME) => {
                 ev_facing.send(FacingUpdate(entity, Facing(facing.0.flip())));
             }
-            (FighterState::RunEnd, 2) => {
-                ev_state.send(FighterStateUpdate(entity, FighterState::Idle));
+            (FighterState::RunEnd, 1) => {
+                let new_state = if control.stick.x != 0.0
+                    && control.stick.get_sideways_direction() != facing.0
+                {
+                    FighterState::RunTurnaround
+                } else {
+                    FighterState::Idle
+                };
+                ev_state.send(FighterStateUpdate(entity, new_state));
             }
             (FighterState::Airdodge, 1) => {
                 let control = control.stick.normalize_or_zero();
@@ -281,9 +322,14 @@ fn compute_common_side_effects(
                 ev_set_velocity.send(SetVelocity(entity, Vec2::ZERO));
                 ev_state.send(FighterStateUpdate(entity, FighterState::IdleAirborne));
             }
-            (FighterState::Dash, 0) => {
-                let dv_x = control.stick.x.signum() * properties.dash_speed();
-                ev_set_velocity.send(SetVelocity(entity, Vec2::new(0.0, dv_x)));
+            (FighterState::Dash, 1) => {
+                let sign = if facing.0 == LeftRight::Left {
+                    -1.0
+                } else {
+                    1.0
+                };
+                let dv_x = sign * properties.dash_speed();
+                ev_set_velocity.send(SetVelocity(entity, Vec2::new(dv_x, 0.0)));
             }
             (FighterState::EnterCrouch, CROUCH_TRANSITION_THRESHOLD_FRAME) => {
                 ev_state.send(FighterStateUpdate(entity, FighterState::Crouch));
@@ -302,7 +348,7 @@ fn land(
     mut ev_state: EventWriter<FighterStateUpdate>,
 ) {
     for collision in ev_collision.read() {
-        if collision.normal.x != 0.0 || collision.normal.y.is_sign_negative() {
+        if collision.normal.x != 0.0 || collision.normal.y <= 0.0 {
             continue;
         }
         let entity_id = collision.entity;

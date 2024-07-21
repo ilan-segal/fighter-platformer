@@ -82,28 +82,11 @@ impl FighterProperties for MegaMan {
     }
 }
 
-// pub fn compute_side_effects(
-//     query: Query<(Entity, &FighterState, &FrameCount, &Facing), With<MegaMan>>,
-//     mut ev_state: EventWriter<FighterStateUpdate>,
-//     mut ev_facing: EventWriter<FacingUpdate>,
-// ) {
-//     for (entity, state, frame, facing) in query.iter() {}
-// }
-
 fn consome_action_events(
     q: Query<(Entity, &FighterState, &Buffer), With<MegaMan>>,
     mut ev_state: EventWriter<FighterStateUpdate>,
     mut commands: Commands,
 ) {
-    // for event in ev_action.read() {
-    //     debug!("{:?}", event);
-    //     if let Ok((e, state)) = q.get(event.0) {
-    //         if let Some(new_state) = get_action_transition(&state, &event.1) {
-    //             ev_state.send(FighterStateUpdate(e, new_state));
-    //             ev_buffer_clear.send(ClearBuffer(e));
-    //         }
-    //     }
-    // }
     for (e, state, buffer) in q.iter() {
         debug!("{:?}", buffer);
         if let Some(new_state) = get_action_transition(state, &buffer.action) {
@@ -120,7 +103,9 @@ fn get_action_transition(state: &FighterState, action: &Action) -> Option<Fighte
         | (FighterState::EnterCrouch, Action::Jump)
         | (FighterState::ExitCrouch, Action::Jump)
         | (FighterState::Walk, Action::Jump)
-        | (FighterState::Turnaround, Action::Jump) => Some(FighterState::JumpSquat),
+        | (FighterState::Turnaround, Action::Jump)
+        | (FighterState::Dash, Action::Jump)
+        | (FighterState::Run, Action::Jump) => Some(FighterState::JumpSquat),
         (FighterState::IdleAirborne, Action::Shield) => Some(FighterState::Airdodge),
         (FighterState::JumpSquat, Action::Shield) => Some(FighterState::Airdodge),
         _ => None,

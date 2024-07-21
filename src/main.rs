@@ -1,4 +1,5 @@
-// use std::collections::HashSet;
+#![feature(if_let_guard)]
+#![feature(let_chains)]
 
 use bevy::{log::LogPlugin, prelude::*, sprite::Anchor};
 use input::{Control, InputSet};
