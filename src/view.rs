@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
-use crate::physics::Position;
-use crate::utils::{Facing, FrameNumber, LeftRight};
+use crate::fighter::Intangible;
+use crate::utils::{Facing, FrameCount, FrameNumber, LeftRight};
 
 #[derive(Component, Clone, Debug, PartialEq, Eq)]
 pub struct AnimationIndices {
@@ -81,16 +81,19 @@ pub fn update_animation_data(
     }
 }
 
-fn snap_texture_to_position(mut query: Query<(&Position, &mut Transform)>) {
-    for (pos, mut transform) in &mut query {
-        transform.translation.x = pos.0.x;
-        transform.translation.y = pos.0.y;
-    }
-}
-
 fn align_sprites_with_facing(mut query: Query<(&Facing, &mut Sprite)>) {
     for (facing, mut sprite) in &mut query {
         sprite.flip_x = facing.0 == LeftRight::Left;
+    }
+}
+
+fn update_intangibility_flash(mut query: Query<(&mut Sprite, &FrameCount, Option<&Intangible>)>) {
+    for (mut sprite, frame, maybe_intangible) in query.iter_mut() {
+        if maybe_intangible.is_some() && (frame.0 / 3) % 2 == 0 {
+            sprite.color = Color::WHITE * 1.25;
+        } else {
+            sprite.color = Color::WHITE;
+        }
     }
 }
 
@@ -103,8 +106,8 @@ impl Plugin for ViewPlugin {
         app.add_systems(
             FixedUpdate,
             (
+                update_intangibility_flash,
                 update_animation_data,
-                snap_texture_to_position,
                 align_sprites_with_facing,
             )
                 .chain()

@@ -3,7 +3,7 @@ use bevy_trait_query::One;
 
 use crate::{
     input::{Action, Control, DirectionalAction, DirectionalActionType},
-    physics::{AddVelocity, Collision, Gravity, Position, SetVelocity, Velocity},
+    physics::{AddVelocity, Collision, Gravity, SetVelocity, Velocity},
     utils::{CardinalDirection, Directed, FrameCount, FrameNumber, LeftRight},
     AccelerateTowards, Airborne, AnimationIndices, AnimationTimer, AnimationUpdate,
     AnimationUpdateEvent, Facing,
@@ -477,7 +477,6 @@ pub struct FighterBundle {
     pub tag: Player,
     pub frame: FrameCount,
     pub facing: Facing,
-    pub position: Position,
     pub velocity: Velocity,
     pub state: FighterState,
     pub sprite_sheet_bundle: SpriteSheetBundle,

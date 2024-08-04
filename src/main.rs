@@ -2,10 +2,12 @@
 #![feature(let_chains)]
 
 use bevy::{log::LogPlugin, prelude::*, sprite::Anchor};
+use hitbox::{Hitbox, Shape};
 use input::{Control, InputSet};
 use iyes_perf_ui::prelude::*;
 
 mod fighter;
+mod hitbox;
 mod input;
 mod physics;
 mod utils;
@@ -13,7 +15,7 @@ mod view;
 
 use fighter::{megaman::MegaMan, FighterBundle, FighterEventSet, Player as PlayerId};
 use physics::*;
-use utils::{Facing, FrameCount, FrameNumber, LeftRight};
+use utils::{Facing, FrameCount, FrameNumber, LeftRight, VisibleDuringDebug};
 use view::*;
 
 const FRAMES_PER_SECOND: FrameNumber = 60;
@@ -37,6 +39,8 @@ fn main() {
             view::ViewPlugin,
             fighter::FighterPlugin,
             physics::PhysicsPlugin,
+            hitbox::HitboxPlugin,
+            utils::DebugPlugin,
         ))
         .insert_resource(Time::<Fixed>::from_hz(FRAMES_PER_SECOND as f64))
         .add_systems(Startup, setup)
@@ -69,7 +73,6 @@ fn setup(
     asset_server: Res<AssetServer>,
     mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
 ) {
-    let tag = PlayerId(0);
     let texture = asset_server.load("spritesheet/x3_2.png");
     let layout = TextureAtlasLayout::from_grid(Vec2::new(80.0, 73.0), 12, 12, None, None);
     let texture_atlas_layout = texture_atlas_layouts.add(layout);
@@ -95,25 +98,43 @@ fn setup(
     // let state_machine = PlayerStateMachine::default();
 
     commands.spawn(Camera2dBundle::default());
-    commands.spawn((
-        FighterBundle {
-            tag,
-            frame: FrameCount(0),
-            facing: Facing(LeftRight::Right),
-            position: Position::default(),
-            velocity: Velocity(Vec2::new(5.0, 0.0)),
-            state: fighter::FighterState::default(),
-            sprite_sheet_bundle,
-            animation_indices,
-            animation_timer,
-            control: Control::default(),
-        },
-        MegaMan,
-    ));
+    commands
+        .spawn((
+            FighterBundle {
+                tag: PlayerId(0),
+                frame: FrameCount(0),
+                facing: Facing(LeftRight::Right),
+                velocity: Velocity(Vec2::new(5.0, 0.0)),
+                state: fighter::FighterState::default(),
+                sprite_sheet_bundle: sprite_sheet_bundle.clone(),
+                animation_indices: animation_indices.clone(),
+                animation_timer: view::AnimationTimer(animation_timer.clone()),
+                control: Control::default(),
+            },
+            MegaMan,
+        ))
+        .with_children(MegaMan::spawn_body_hitboxes);
+    commands
+        .spawn((
+            FighterBundle {
+                tag: PlayerId(1),
+                frame: FrameCount(0),
+                facing: Facing(LeftRight::Right),
+                velocity: Velocity(Vec2::new(0.0, 0.0)),
+                state: fighter::FighterState::default(),
+                sprite_sheet_bundle: sprite_sheet_bundle.clone(),
+                animation_indices: animation_indices.clone(),
+                animation_timer: view::AnimationTimer(animation_timer.clone()),
+                control: Control::default(),
+            },
+            MegaMan,
+        ))
+        .with_children(MegaMan::spawn_body_hitboxes);
     commands.spawn((
         SpriteBundle {
             transform: Transform {
                 scale: Vec3::new(800.0, 1.0, 0.0),
+                translation: Vec3::new(0.0, -200.0, 0.0),
                 ..default()
             },
             sprite: Sprite {
@@ -126,7 +147,6 @@ fn setup(
             normal: Vec2::new(0.0, 1.0),
             breadth: 800.0,
         },
-        Position(Vec2::new(0.0, -200.0)),
     ));
-    commands.spawn(PerfUiCompleteBundle::default());
+    commands.spawn((PerfUiCompleteBundle::default(), VisibleDuringDebug));
 }

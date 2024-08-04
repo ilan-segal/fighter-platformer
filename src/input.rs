@@ -233,8 +233,9 @@ fn buffer_actions_from_gamepad(
 #[derive(Debug, PartialEq, Eq)]
 pub enum DirectionalActionType {
     Smash,
-    Clockwise,
-    CounterClockwise,
+    // TODO: Implement these
+    // Clockwise,
+    // CounterClockwise,
 }
 
 #[derive(Component, Debug)]

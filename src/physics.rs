@@ -1,9 +1,6 @@
 use bevy::{ecs::schedule::SystemSet, prelude::*};
 
 #[derive(Component, Default)]
-pub struct Position(pub Vec2);
-
-#[derive(Component, Default)]
 pub struct Velocity(pub Vec2);
 
 #[derive(Event)]
@@ -67,24 +64,27 @@ pub struct Collider {
 }
 
 impl Collider {
-    fn get_pushback(&self, p: &Vec2, d: &Vec2, c: &Vec2) -> Option<Vec2> {
-        let denominator = self.normal.dot(*d);
+    fn get_pushback(&self, position: &Vec3, displacement: &Vec2, centre: &Vec3) -> Option<Vec2> {
+        let p = Vec2::new(position.x, position.y);
+        let c = Vec2::new(centre.x, centre.y);
+        let denominator = self.normal.dot(*displacement);
         // If denominator is 0, velocity is parallel to collider
         // If denominator is greater than 0, we're moving away from the collider
         if denominator >= 0.0 {
             return None;
         }
-        let numerator = self.normal.dot(*c - *p);
+        let numerator = self.normal.dot(c - p);
         let t = numerator / denominator;
         if t < 0.0 || t > 1.0 {
             return None;
         }
-        let b_0 = *p + t * *d;
-        let distance_from_centre = (b_0 - *c).length();
+        let b_0 = p + t * *displacement;
+        let distance_from_centre = (b_0 - c).length();
         if distance_from_centre > self.breadth * 0.5 {
             return None;
         }
-        Some((t - 1.0) * d.dot(self.normal) * self.normal)
+        let result = (t - 1.0) * displacement.dot(self.normal) * self.normal;
+        return Some(result);
     }
 }
 
@@ -98,8 +98,8 @@ pub struct Collision {
 pub struct Airborne;
 
 fn apply_velocity(
-    mut objects: Query<(Entity, &mut Position, &mut Velocity)>,
-    colliders: Query<(&Collider, &Position), Without<Velocity>>,
+    mut objects: Query<(Entity, &mut Transform, &mut Velocity)>,
+    colliders: Query<(&Collider, &Transform), Without<Velocity>>,
     mut ev_collision: EventWriter<Collision>,
     mut commands: Commands,
 ) {
@@ -122,19 +122,21 @@ fn apply_velocity(
 }
 
 fn displace_and_return_pushback<'a>(
-    position: &mut Position,
+    position: &mut Transform,
     displacement: &Vec2,
-    colliders: impl Iterator<Item = (&'a Collider, &'a Position)>,
+    colliders: impl Iterator<Item = (&'a Collider, &'a Transform)>,
 ) -> Vec2 {
     let pushback = colliders
         .into_iter()
         .filter_map(|(collider, centre)| {
-            collider.get_pushback(&position.0, displacement, &centre.0)
+            collider.get_pushback(&position.translation, displacement, &centre.translation)
         })
         // .filter(|p| p.length() > 1.0)
         .next()
         .unwrap_or_default();
-    position.0 += *displacement + pushback;
+    let net_displacement = *displacement + pushback;
+    position.translation.x += net_displacement.x;
+    position.translation.y += net_displacement.y;
     return pushback;
 }
 

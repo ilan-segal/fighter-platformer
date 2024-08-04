@@ -3,6 +3,7 @@ use bevy::prelude::*;
 
 use crate::{
     fighter::{FighterEventSet, FighterStateUpdate},
+    hitbox::{Hitbox, HitboxBundle, HitboxGroup, HitboxGroupBundle, HitboxPurpose, Shape},
     input::{Action, Buffer},
     utils::{FrameCount, FrameNumber},
     AnimationIndices, AnimationUpdate, AnimationUpdateEvent, Velocity,
@@ -19,6 +20,31 @@ const GRAVITY: f32 = -0.3;
 
 #[derive(Component)]
 pub struct MegaMan;
+
+impl MegaMan {
+    pub fn spawn_body_hitboxes(child_builder: &mut ChildBuilder) {
+        child_builder
+            .spawn(HitboxGroupBundle {
+                hitbox_group: HitboxGroup::default(),
+                transform: TransformBundle::default(),
+            })
+            .with_children(|hitbox_group| {
+                hitbox_group.spawn(HitboxBundle {
+                    hitbox: Hitbox {
+                        shape: Shape::Pill {
+                            major_radius: 20.0,
+                            minor_radius: 10.0,
+                        },
+                        purpose: HitboxPurpose::Body,
+                    },
+                    transform: TransformBundle {
+                        local: Transform::from_xyz(0.0, 20.0, 1.0),
+                        ..Default::default()
+                    },
+                });
+            });
+    }
+}
 
 impl FighterProperties for MegaMan {
     fn gravity(&self) -> f32 {
