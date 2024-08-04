@@ -270,7 +270,7 @@ fn add_mesh_to_hitboxes(
     mut materials: ResMut<Assets<ColorMaterial>>,
     query: Query<(Entity, &Hitbox, &Transform), Without<Mesh2dHandle>>,
 ) {
-    for (parent_id, hitbox, transform) in query.iter() {
+    for (e, hitbox, transform) in query.iter() {
         let mesh_handle = match hitbox.shape {
             Shape::Circle(r) => Mesh2dHandle(meshes.add(Circle { radius: r })),
             Shape::Pill {
@@ -287,7 +287,7 @@ fn add_mesh_to_hitboxes(
             HitboxPurpose::Body => Color::rgba(0.5, 0.5, 0.2, 0.5),
         };
 
-        commands.entity(parent_id).insert((
+        commands.entity(e).insert((
             MaterialMesh2dBundle {
                 mesh: mesh_handle,
                 material: materials.add(colour),

@@ -2,7 +2,6 @@
 #![feature(let_chains)]
 
 use bevy::{log::LogPlugin, prelude::*, sprite::Anchor};
-use hitbox::{Hitbox, Shape};
 use input::{Control, InputSet};
 use iyes_perf_ui::prelude::*;
 
@@ -15,7 +14,7 @@ mod view;
 
 use fighter::{megaman::MegaMan, FighterBundle, FighterEventSet, Player as PlayerId};
 use physics::*;
-use utils::{Facing, FrameCount, FrameNumber, LeftRight, VisibleDuringDebug};
+use utils::{DebugMode, Facing, FrameCount, FrameNumber, LeftRight, VisibleDuringDebug};
 use view::*;
 
 const FRAMES_PER_SECOND: FrameNumber = 60;
@@ -72,7 +71,9 @@ fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+    mut debug_mode: ResMut<DebugMode>,
 ) {
+    debug_mode.0 = true;
     let texture = asset_server.load("spritesheet/x3_2.png");
     let layout = TextureAtlasLayout::from_grid(Vec2::new(80.0, 73.0), 12, 12, None, None);
     let texture_atlas_layout = texture_atlas_layouts.add(layout);

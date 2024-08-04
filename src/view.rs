@@ -81,9 +81,16 @@ pub fn update_animation_data(
     }
 }
 
-fn align_sprites_with_facing(mut query: Query<(&Facing, &mut Sprite)>) {
-    for (facing, mut sprite) in &mut query {
-        sprite.flip_x = facing.0 == LeftRight::Left;
+fn align_sprites_with_facing(mut query: Query<(&Facing, &mut Transform)>) {
+    for (facing, mut transform) in &mut query {
+        let desired_sign = match facing.0 {
+            LeftRight::Left => -1.0,
+            LeftRight::Right => 1.0,
+        };
+        let current_sign = transform.scale.x.signum();
+        if current_sign != desired_sign {
+            transform.scale.x *= -1.0;
+        }
     }
 }
 

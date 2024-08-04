@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use super::{FighterProperties, FighterState};
 use bevy::prelude::*;
 
@@ -32,13 +34,28 @@ impl MegaMan {
                 hitbox_group.spawn(HitboxBundle {
                     hitbox: Hitbox {
                         shape: Shape::Pill {
-                            major_radius: 20.0,
-                            minor_radius: 10.0,
+                            major_radius: 16.0,
+                            minor_radius: 6.5,
                         },
                         purpose: HitboxPurpose::Body,
                     },
                     transform: TransformBundle {
-                        local: Transform::from_xyz(0.0, 20.0, 1.0),
+                        local: Transform::from_xyz(-1.0, 26.0, 1.0),
+                        ..Default::default()
+                    },
+                });
+                let mut left_arm_transform = Transform::from_xyz(-12.0, 22.0, 1.0);
+                left_arm_transform.rotate_z(-PI * 0.45);
+                hitbox_group.spawn(HitboxBundle {
+                    hitbox: Hitbox {
+                        shape: Shape::Pill {
+                            major_radius: 8.0,
+                            minor_radius: 3.0,
+                        },
+                        purpose: HitboxPurpose::Body,
+                    },
+                    transform: TransformBundle {
+                        local: left_arm_transform,
                         ..Default::default()
                     },
                 });

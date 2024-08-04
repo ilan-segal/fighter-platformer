@@ -68,7 +68,7 @@ impl Directed for Vec2 {
 pub struct Facing(pub LeftRight);
 
 #[derive(Resource, Default)]
-pub struct DebugMode(bool);
+pub struct DebugMode(pub bool);
 
 fn check_for_debug_toggle(keys: Res<ButtonInput<KeyCode>>, mut debug_mode: ResMut<DebugMode>) {
     if keys.just_pressed(KeyCode::Backquote) {
