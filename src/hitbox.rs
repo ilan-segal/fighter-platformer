@@ -60,15 +60,15 @@ impl Default for Shape {
 "Radius" and two endpoints
 */
 fn get_pill_geometric_data(
-    major_axis: f32,
-    minor_axis: f32,
+    major_radius: f32,
+    minor_radius: f32,
     transform: &Transform,
 ) -> (f32, Vec2, Vec2) {
-    let a = Vec3::new(0.0, major_axis, 0.0) * transform.scale;
+    let a = Vec3::new(0.0, major_radius, 0.0) * transform.scale;
     let rotated_a = transform.rotation.mul_vec3(a);
     let rotated_b = -rotated_a;
     return (
-        minor_axis,
+        minor_radius * transform.scale.y,
         (rotated_a + transform.translation).xy(),
         (rotated_b + transform.translation).xy(),
     );
@@ -99,22 +99,22 @@ impl Shape {
                 let d_b = (c - b).length();
                 // Perpendicular distance (see GDD)
                 let t = (c - a).dot(b - a) / (b - a).length_squared();
-                let point_on_line_closest_to_c = c - (a + (b - a) * t);
+                let perpendicular_from_line_to_c = c - (a + (b - a) * t);
                 let d_p = if 0.0 <= t && t <= 1.0 {
-                    point_on_line_closest_to_c.length()
+                    perpendicular_from_line_to_c.length()
                 } else {
                     f32::INFINITY
                 };
                 let distance = [d_a, d_b, d_p]
                     .into_iter()
                     .reduce(f32::min)
-                    .expect("Circle-Pill distances should exist");
+                    .expect("Circle-Pill distance");
                 let midpoint = if distance == d_a {
                     0.5 * (a + c)
                 } else if distance == d_b {
                     0.5 * (b + c)
                 } else {
-                    0.5 * (c + point_on_line_closest_to_c)
+                    c - 0.5 * perpendicular_from_line_to_c
                 };
                 NearestPass {
                     midpoint,
@@ -277,13 +277,13 @@ fn add_mesh_to_hitboxes(
                 minor_radius,
             } => {
                 let (r, a, b) = get_pill_geometric_data(major_radius, minor_radius, transform);
-                let r_major = (a - b).length() * 0.5;
-                let mesh = Capsule2d::new(r, r_major);
+                let length = (a - b).length();
+                let mesh = Capsule2d::new(r, length);
                 Mesh2dHandle(meshes.add(mesh))
             }
         };
         let colour = match hitbox.purpose {
-            HitboxPurpose::Body => Color::rgba(0.5, 0.5, 0.2, 0.5),
+            HitboxPurpose::Body => Color::rgba(0.05, 0.9, 0.05, 0.75),
         };
 
         commands.entity(e).insert((
@@ -313,6 +313,10 @@ fn detect_hitbox_overlaps(
         let maybe_overlap = hitboxes_1
             .cartesian_product(hitboxes_2)
             .map(|((h1, gt1), (h2, gt2))| {
+                /*
+                These calls to compute_transform could theoretically fail,
+                but this should never happen in practice.
+                 */
                 (
                     h1.shape,
                     gt1.compute_transform(),

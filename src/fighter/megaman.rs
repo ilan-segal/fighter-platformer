@@ -34,7 +34,7 @@ impl MegaMan {
                 hitbox_group.spawn(HitboxBundle {
                     hitbox: Hitbox {
                         shape: Shape::Pill {
-                            major_radius: 16.0,
+                            major_radius: 8.0,
                             minor_radius: 6.5,
                         },
                         purpose: HitboxPurpose::Body,
@@ -49,7 +49,7 @@ impl MegaMan {
                 hitbox_group.spawn(HitboxBundle {
                     hitbox: Hitbox {
                         shape: Shape::Pill {
-                            major_radius: 8.0,
+                            major_radius: 4.0,
                             minor_radius: 3.0,
                         },
                         purpose: HitboxPurpose::Body,

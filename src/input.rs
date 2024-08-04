@@ -8,7 +8,7 @@ use std::collections::{HashMap, VecDeque};
 use crate::{fighter::Player, utils::FrameNumber};
 
 const BUFFER_SIZE: FrameNumber = 8;
-const CONTROL_STICK_DEADZONE_SIZE: f32 = 0.5;
+const CONTROL_STICK_DEADZONE_SIZE: f32 = 0.25;
 const CONTROL_STICK_LIVEZONE_SIZE: f32 = 1.0 - CONTROL_STICK_DEADZONE_SIZE;
 const SMASH_INPUT_MAX_DURATION: FrameNumber = 4;
 const SMASH_INPUT_THRESHOLD_DISTANCE_FROM_CENTRE: f32 = 0.99;
