@@ -82,7 +82,7 @@ impl Shape {
                 let p2 = t2.translation.xy();
                 return NearestPass {
                     midpoint: 0.5 * (p1 + p2),
-                    distance: (p1 - p2).length() - r1 - r2,
+                    distance: (p1 - p2).length() - r1 * t1.scale.y - r2 * t2.scale.y,
                 };
             }
             (
