@@ -17,7 +17,7 @@ const JUMPSQUAT: FrameNumber = 4;
 const FRICTION: f32 = 0.3;
 const WALK_SPEED: f32 = 3.0;
 const DASH_SPEED: f32 = 5.0;
-const DASH_DURATION: FrameNumber = 20;
+const DASH_DURATION: FrameNumber = 10;
 const GRAVITY: f32 = -0.3;
 
 #[derive(Component)]

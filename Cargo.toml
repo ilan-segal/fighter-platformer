@@ -9,6 +9,7 @@ edition = "2021"
 bevy = { version = "0.13.2", features = [ "dynamic_linking" ] }
 bevy-trait-query = "0.5.1"
 enumset = "1.1.3"
+itertools = "0.13.0"
 iyes_perf_ui = "0.2.3"
 
 # Enable a small amount of optimization in debug mode

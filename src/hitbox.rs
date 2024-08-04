@@ -1,13 +1,12 @@
-use std::ops::Add;
-use std::{collections::HashSet, f32::consts::PI};
-
 use crate::fighter::FighterEventSet;
 use crate::utils::VisibleDuringDebug;
 use bevy::{
     prelude::*,
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
+use itertools::Itertools;
 
+#[derive(Debug)]
 struct NearestPass {
     midpoint: Vec2,
     distance: f32,
@@ -143,7 +142,7 @@ impl Shape {
                         distance: -r1 - r2,
                     };
                 }
-                // Harder case: no direct intersection, each endpoint gets treated as a circle
+                // Harder case: no direct intersection, test each endpoint as a circle against the other pill
                 [
                     (
                         Shape::Circle(r1),
@@ -253,7 +252,7 @@ pub struct HitboxGroupBundle {
     pub transform: TransformBundle,
 }
 
-fn clear_empty_hitbox_groups(
+fn despawn_empty_hitbox_groups(
     mut commands: Commands,
     query: Query<(Entity, &Children), With<HitboxGroup>>,
 ) {
@@ -300,6 +299,36 @@ fn add_mesh_to_hitboxes(
     }
 }
 
+fn detect_hitbox_overlaps(
+    q_hitbox_groups: Query<(Entity, &Children), With<HitboxGroup>>,
+    q_hitboxes: Query<(&Hitbox, &GlobalTransform)>,
+) {
+    for [(e1, children_1), (e2, children_2)] in q_hitbox_groups.iter_combinations() {
+        let hitboxes_1 = children_1
+            .iter()
+            .filter_map(|child_id| q_hitboxes.get(*child_id).ok());
+        let hitboxes_2 = children_2
+            .iter()
+            .filter_map(|child_id| q_hitboxes.get(*child_id).ok());
+        let maybe_overlap = hitboxes_1
+            .cartesian_product(hitboxes_2)
+            .map(|((h1, gt1), (h2, gt2))| {
+                (
+                    h1.shape,
+                    gt1.compute_transform(),
+                    h2.shape,
+                    gt2.compute_transform(),
+                )
+            })
+            .map(|(s1, t1, s2, t2)| Shape::nearest_pass(&s1, &t1, &s2, &t2))
+            .filter(|pass| pass.is_collision())
+            .reduce(std::cmp::min);
+        if let Some(nearest_pass) = maybe_overlap {
+            debug!("Overlap between {:?}, {:?}: {:?}", e1, e2, nearest_pass);
+        }
+    }
+}
+
 pub struct HitboxPlugin;
 
 impl Plugin for HitboxPlugin {
@@ -307,7 +336,10 @@ impl Plugin for HitboxPlugin {
         app.add_systems(Update, add_mesh_to_hitboxes)
             .add_systems(
                 FixedUpdate,
-                clear_empty_hitbox_groups.after(FighterEventSet::React),
+                (
+                    detect_hitbox_overlaps.after(FighterEventSet::Act),
+                    despawn_empty_hitbox_groups.after(FighterEventSet::React),
+                ),
             );
     }
 }
