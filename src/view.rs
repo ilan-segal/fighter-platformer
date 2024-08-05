@@ -97,7 +97,7 @@ fn align_sprites_with_facing(mut query: Query<(&Facing, &mut Transform)>) {
 fn update_intangibility_flash(mut query: Query<(&mut Sprite, &FrameCount, Option<&Intangible>)>) {
     for (mut sprite, frame, maybe_intangible) in query.iter_mut() {
         if maybe_intangible.is_some() && (frame.0 / 3) % 2 == 0 {
-            sprite.color = Color::WHITE * 1.25;
+            sprite.color = Color::hsl(0.0, 0.0, 1.25);
         } else {
             sprite.color = Color::WHITE;
         }

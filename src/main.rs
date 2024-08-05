@@ -28,7 +28,7 @@ fn main() {
                 .set(LogPlugin {
                     level: bevy::log::Level::INFO,
                     filter: "fighter_platformer=debug".to_string(),
-                    update_subscriber: None,
+                    ..Default::default()
                 }),
             bevy::diagnostic::FrameTimeDiagnosticsPlugin,
             bevy::diagnostic::EntityCountDiagnosticsPlugin,
@@ -75,7 +75,7 @@ fn setup(
 ) {
     debug_mode.0 = true;
     let texture = asset_server.load("spritesheet/x3_2.png");
-    let layout = TextureAtlasLayout::from_grid(Vec2::new(80.0, 73.0), 12, 12, None, None);
+    let layout = TextureAtlasLayout::from_grid(UVec2::new(80, 73), 12, 12, None, None);
     let texture_atlas_layout = texture_atlas_layouts.add(layout);
     // Use only the subset of sprites in the sheet that make up the run animation
     let animation_indices = AnimationIndices {
@@ -83,19 +83,21 @@ fn setup(
         last: 137,
     };
     let animation_timer = AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating));
-    let sprite_sheet_bundle = SpriteSheetBundle {
-        texture,
-        atlas: TextureAtlas {
-            layout: texture_atlas_layout,
-            index: animation_indices.first,
-        },
-        sprite: Sprite {
-            anchor: Anchor::BottomCenter,
+    let sprite_sheet_bundle = (
+        SpriteBundle {
+            texture,
+            sprite: Sprite {
+                anchor: Anchor::BottomCenter,
+                ..default()
+            },
+            transform: Transform::from_scale(Vec3::splat(2.0)),
             ..default()
         },
-        transform: Transform::from_scale(Vec3::splat(2.0)),
-        ..default()
-    };
+        TextureAtlas {
+            layout: texture_atlas_layout,
+            ..default()
+        },
+    );
     // let state_machine = PlayerStateMachine::default();
 
     commands.spawn(Camera2dBundle::default());
@@ -107,11 +109,12 @@ fn setup(
                 facing: Facing(LeftRight::Right),
                 velocity: Velocity(Vec2::new(5.0, 0.0)),
                 state: fighter::FighterState::default(),
-                sprite_sheet_bundle: sprite_sheet_bundle.clone(),
                 animation_indices: animation_indices.clone(),
                 animation_timer: view::AnimationTimer(animation_timer.clone()),
                 control: Control::default(),
+                properties: MegaMan::get_properties(),
             },
+            sprite_sheet_bundle.clone(),
             MegaMan,
         ))
         .with_children(MegaMan::spawn_body_hitboxes);
@@ -123,11 +126,12 @@ fn setup(
                 facing: Facing(LeftRight::Right),
                 velocity: Velocity(Vec2::new(0.0, 0.0)),
                 state: fighter::FighterState::default(),
-                sprite_sheet_bundle: sprite_sheet_bundle.clone(),
                 animation_indices: animation_indices.clone(),
                 animation_timer: view::AnimationTimer(animation_timer.clone()),
                 control: Control::default(),
+                properties: MegaMan::get_properties(),
             },
+            sprite_sheet_bundle.clone(),
             MegaMan,
         ))
         .with_children(MegaMan::spawn_body_hitboxes);
@@ -139,7 +143,7 @@ fn setup(
                 ..default()
             },
             sprite: Sprite {
-                color: Color::rgb(1.0, 1.0, 1.0),
+                color: Color::WHITE,
                 ..default()
             },
             ..default()

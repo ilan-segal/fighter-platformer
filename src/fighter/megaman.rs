@@ -7,23 +7,28 @@ use crate::{
     fighter::{FighterEventSet, FighterStateUpdate},
     hitbox::{Hitbox, HitboxBundle, HitboxGroup, HitboxGroupBundle, HitboxPurpose, Shape},
     input::{Action, Buffer},
-    utils::{FrameCount, FrameNumber},
+    utils::FrameCount,
     AnimationIndices, AnimationUpdate, AnimationUpdateEvent, Velocity,
 };
-
-const LANDING_LAG: FrameNumber = 6;
-const IDLE_CYCLE: FrameNumber = 240;
-const JUMPSQUAT: FrameNumber = 4;
-const FRICTION: f32 = 0.3;
-const WALK_SPEED: f32 = 3.0;
-const DASH_SPEED: f32 = 5.0;
-const DASH_DURATION: FrameNumber = 10;
-const GRAVITY: f32 = -0.3;
 
 #[derive(Component)]
 pub struct MegaMan;
 
 impl MegaMan {
+    pub fn get_properties() -> FighterProperties {
+        FighterProperties {
+            walk_speed: 3.0,
+            dash_speed: 5.0,
+            jump_speed: 10.0,
+            ground_friction: 0.3,
+            gravity: -0.3,
+            dash_duration: 10,
+            land_crouch_duration: 6,
+            jumpsquat_duration: 4,
+            ..Default::default()
+        }
+    }
+
     pub fn spawn_body_hitboxes(child_builder: &mut ChildBuilder) {
         child_builder
             .spawn(HitboxGroupBundle {
@@ -63,68 +68,6 @@ impl MegaMan {
     }
 }
 
-impl FighterProperties for MegaMan {
-    fn gravity(&self) -> f32 {
-        GRAVITY
-    }
-
-    fn dash_duration(&self) -> FrameNumber {
-        DASH_DURATION
-    }
-
-    fn dash_speed(&self) -> f32 {
-        DASH_SPEED
-    }
-
-    fn walk_speed(&self) -> f32 {
-        WALK_SPEED
-    }
-
-    fn land_crouch_duration(&self) -> FrameNumber {
-        LANDING_LAG
-    }
-
-    fn idle_cycle_duration(&self) -> FrameNumber {
-        IDLE_CYCLE
-    }
-
-    fn jumpsquat(&self) -> FrameNumber {
-        JUMPSQUAT
-    }
-
-    fn jump_speed(&self) -> f32 {
-        10.0
-    }
-
-    fn ground_friction(&self) -> f32 {
-        FRICTION
-    }
-
-    fn animation_for_state(&self, state: &FighterState) -> Option<AnimationUpdate> {
-        match state {
-            FighterState::Idle => Some(AnimationUpdate::SingleFrame(0)),
-            FighterState::JumpSquat
-            | FighterState::LandCrouch
-            | FighterState::EnterCrouch
-            | FighterState::ExitCrouch => Some(AnimationUpdate::SingleFrame(133)),
-            FighterState::Crouch => Some(AnimationUpdate::SingleFrame(134)),
-            FighterState::Walk => Some(AnimationUpdate::MultiFrame {
-                indices: AnimationIndices { first: 5, last: 14 },
-                seconds_per_frame: 0.1,
-            }),
-            FighterState::Airdodge => Some(AnimationUpdate::SingleFrame(33)),
-            FighterState::Dash => Some(AnimationUpdate::SingleFrame(24)),
-            FighterState::Turnaround => Some(AnimationUpdate::SingleFrame(74)),
-            FighterState::RunTurnaround => Some(AnimationUpdate::SingleFrame(30)),
-            FighterState::Run => Some(AnimationUpdate::MultiFrame {
-                indices: AnimationIndices { first: 5, last: 14 },
-                seconds_per_frame: 0.1,
-            }),
-            _ => None,
-        }
-    }
-}
-
 fn consome_action_events(
     q: Query<(Entity, &FighterState, &Buffer), With<MegaMan>>,
     mut ev_state: EventWriter<FighterStateUpdate>,
@@ -158,14 +101,23 @@ fn get_action_transition(state: &FighterState, action: &Action) -> Option<Fighte
 fn emit_animation_update(
     q: Query<(Entity, &FighterState, &FrameCount, &Velocity), With<MegaMan>>,
     mut ev_animation: EventWriter<AnimationUpdateEvent>,
+    mut ev_state: EventWriter<FighterStateUpdate>,
 ) {
     for (e, state, frame, velocity) in &q {
+        if let Some(basic_update) = animation_for_state(state).map(|u| AnimationUpdateEvent(e, u)) {
+            ev_animation.send(basic_update);
+            continue;
+        }
         if let Some(update) = match (state, frame.0) {
             // Blinky blinky
             (FighterState::Idle, 200) => Some(AnimationUpdate::MultiFrame {
                 indices: AnimationIndices { first: 0, last: 2 },
                 seconds_per_frame: 0.1,
             }),
+            (FighterState::Idle, 240) => {
+                ev_state.send(FighterStateUpdate(e, FighterState::Idle));
+                None
+            }
             (FighterState::IdleAirborne, _) => {
                 let y = velocity.0.y;
                 if y > 1.5 {
@@ -190,15 +142,36 @@ fn emit_animation_update(
     }
 }
 
+fn animation_for_state(state: &FighterState) -> Option<AnimationUpdate> {
+    match state {
+        FighterState::Idle => Some(AnimationUpdate::SingleFrame(0)),
+        FighterState::JumpSquat
+        | FighterState::LandCrouch
+        | FighterState::EnterCrouch
+        | FighterState::ExitCrouch => Some(AnimationUpdate::SingleFrame(133)),
+        FighterState::Crouch => Some(AnimationUpdate::SingleFrame(134)),
+        FighterState::Walk => Some(AnimationUpdate::MultiFrame {
+            indices: AnimationIndices { first: 5, last: 14 },
+            seconds_per_frame: 0.1,
+        }),
+        FighterState::Airdodge => Some(AnimationUpdate::SingleFrame(33)),
+        FighterState::Dash => Some(AnimationUpdate::SingleFrame(24)),
+        FighterState::Turnaround => Some(AnimationUpdate::SingleFrame(74)),
+        FighterState::RunTurnaround => Some(AnimationUpdate::SingleFrame(30)),
+        FighterState::Run => Some(AnimationUpdate::MultiFrame {
+            indices: AnimationIndices { first: 5, last: 14 },
+            seconds_per_frame: 0.1,
+        }),
+        _ => None,
+    }
+}
+
 pub struct MegaManPlugin;
 impl Plugin for MegaManPlugin {
-    fn build(&self, app: &mut bevy::prelude::App) {
-        use bevy_trait_query::RegisterExt;
-
-        app.register_component_as::<dyn FighterProperties, MegaMan>()
-            .add_systems(
-                FixedUpdate,
-                (consome_action_events, emit_animation_update).in_set(FighterEventSet::Act),
-            );
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            FixedUpdate,
+            (consome_action_events, emit_animation_update).in_set(FighterEventSet::Act),
+        );
     }
 }
