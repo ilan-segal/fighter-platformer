@@ -8,6 +8,7 @@ use itertools::Itertools;
 
 #[derive(Debug)]
 struct NearestPass {
+    #[allow(dead_code)]
     midpoint: Vec2,
     distance: f32,
 }
@@ -283,7 +284,7 @@ fn add_mesh_to_hitboxes(
             }
         };
         let colour = match hitbox.purpose {
-            HitboxPurpose::Body => Color::rgba(0.05, 0.9, 0.05, 0.75),
+            HitboxPurpose::Body => Color::linear_rgba(0.05, 0.9, 0.05, 0.75),
         };
 
         commands.entity(e).insert((
