@@ -41,6 +41,7 @@ pub enum FighterState {
     // Ensures that the player cannot Dash out of a Run by going Run -> Idle -> Dash
     RunEnd,
     Airdodge,
+    Attack,
 }
 
 impl FighterState {
@@ -145,23 +146,24 @@ fn update_fighter_state(
 }
 
 fn compute_common_side_effects(
-    query: Query<(
+    mut query: Query<(
         Entity,
         &FighterState,
         &FrameCount,
-        &Facing,
+        &mut Facing,
         &FighterProperties,
         &Control,
         Option<&DirectionalAction>,
     )>,
     mut ev_state: EventWriter<FighterStateUpdate>,
-    mut ev_facing: EventWriter<FacingUpdate>,
     mut ev_accelerate: EventWriter<AccelerateTowards>,
     mut ev_add_velocity: EventWriter<AddVelocity>,
     mut ev_set_velocity: EventWriter<SetVelocity>,
     mut commands: Commands,
 ) {
-    for (entity, state, frame, facing, properties, control, directional_action) in &query {
+    for (entity, state, frame, mut facing, properties, control, directional_action) in
+        query.iter_mut()
+    {
         // Implementation-specific stuff
         match state {
             FighterState::LandCrouch if frame.0 == properties.land_crouch_duration => {
@@ -174,13 +176,13 @@ fn compute_common_side_effects(
                 ev_state.send(FighterStateUpdate(entity, FighterState::Idle));
             }
             FighterState::Turnaround if frame.0 == properties.turnaround_duration / 2 => {
-                ev_facing.send(FacingUpdate(entity, Facing(facing.0.flip())));
+                facing.0 = facing.0.flip();
             }
             FighterState::RunTurnaround if frame.0 == properties.run_turnaround_duration => {
                 ev_state.send(FighterStateUpdate(entity, FighterState::Run));
             }
             FighterState::RunTurnaround if frame.0 == properties.run_turnaround_duration / 2 => {
-                ev_facing.send(FacingUpdate(entity, Facing(facing.0.flip())));
+                facing.0 = facing.0.flip();
             }
             FighterState::Airdodge if frame.0 == properties.airdodge_duration => {
                 ev_set_velocity.send(SetVelocity(entity, Vec2::ZERO));
@@ -227,7 +229,7 @@ fn compute_common_side_effects(
                     return;
                 }
                 ev_state.send(FighterStateUpdate(entity, FighterState::Dash));
-                ev_facing.send(FacingUpdate(entity, Facing(direction)));
+                facing.0 = direction;
                 commands
                     .entity(entity)
                     .remove::<DirectionalAction>();
@@ -378,17 +380,6 @@ fn add_intangible(
     }
 }
 
-#[derive(Event, Clone, Copy)]
-pub struct FacingUpdate(Entity, Facing);
-
-fn update_facing(mut updates: EventReader<FacingUpdate>, mut commands: Commands) {
-    for update in updates.read() {
-        commands
-            .entity(update.0)
-            .insert(update.1);
-    }
-}
-
 fn update_gravity(mut commands: Commands, q: Query<(Entity, &FighterState, &FighterProperties)>) {
     q.iter().for_each(|(e, s, p)| {
         if s.is_affected_by_gravity() {
@@ -423,7 +414,6 @@ impl Plugin for FighterPlugin {
                         go_airborne,
                         update_fighter_state,
                         update_gravity,
-                        update_facing,
                         remove_intangible,
                         add_intangible,
                     )
@@ -437,8 +427,7 @@ impl Plugin for FighterPlugin {
                 FixedUpdate,
                 FighterEventSet::Act.before(FighterEventSet::React),
             )
-            .add_event::<FighterStateUpdate>()
-            .add_event::<FacingUpdate>();
+            .add_event::<FighterStateUpdate>();
     }
 }
 

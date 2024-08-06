@@ -5,9 +5,12 @@ use crate::{
     fighter::{FighterEventSet, FighterStateUpdate},
     hitbox::{Hitbox, HitboxBundle, HitboxGroup, HitboxGroupBundle, HitboxPurpose, Shape},
     input::{Action, Buffer},
-    utils::FrameCount,
+    utils::{FrameCount, FrameNumber},
     AnimationIndices, AnimationUpdate, AnimationUpdateEvent, Velocity,
 };
+
+const ATTACK_DURATION: FrameNumber = 20;
+const ATTACK_EMIT_LEMON: FrameNumber = 10;
 
 #[derive(Component)]
 pub struct MegaMan;
@@ -37,13 +40,13 @@ impl MegaMan {
                 hitbox_group.spawn(HitboxBundle {
                     hitbox: Hitbox {
                         shape: Shape::Pill {
-                            major_radius: 8.0,
-                            minor_radius: 7.5,
+                            major_radius: 6.0,
+                            minor_radius: 15.5,
                         },
                         purpose: HitboxPurpose::Body,
                     },
                     transform: TransformBundle {
-                        local: Transform::from_xyz(-1.0, 26.0, 1.0),
+                        local: Transform::from_xyz(-1.0, 20.75, 1.0),
                         ..Default::default()
                     },
                 });
@@ -51,7 +54,21 @@ impl MegaMan {
     }
 }
 
-fn consome_action_events(
+fn update_state_for_frame_count(
+    q: Query<(Entity, &FighterState, &FrameCount), With<MegaMan>>,
+    mut ev_state: EventWriter<FighterStateUpdate>,
+) {
+    for (e, state, FrameCount(frame)) in q.iter() {
+        match (state, *frame) {
+            (FighterState::Attack, ATTACK_DURATION) => {
+                ev_state.send(FighterStateUpdate(e, FighterState::Idle));
+            }
+            _ => {}
+        }
+    }
+}
+
+fn consume_action_events(
     q: Query<(Entity, &FighterState, &Buffer), With<MegaMan>>,
     mut ev_state: EventWriter<FighterStateUpdate>,
     mut commands: Commands,
@@ -77,6 +94,7 @@ fn get_action_transition(state: &FighterState, action: &Action) -> Option<Fighte
         | (FighterState::Run, Action::Jump) => Some(FighterState::JumpSquat),
         (FighterState::IdleAirborne, Action::Shield) => Some(FighterState::Airdodge),
         (FighterState::JumpSquat, Action::Shield) => Some(FighterState::Airdodge),
+        (FighterState::Idle, Action::Attack) => Some(FighterState::Attack),
         _ => None,
     }
 }
@@ -145,6 +163,7 @@ fn animation_for_state(state: &FighterState) -> Option<AnimationUpdate> {
             indices: AnimationIndices { first: 5, last: 14 },
             seconds_per_frame: 0.1,
         }),
+        FighterState::Attack => Some(AnimationUpdate::SingleFrame(43)),
         _ => None,
     }
 }
@@ -154,7 +173,9 @@ impl Plugin for MegaManPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             FixedUpdate,
-            (consome_action_events, emit_animation_update).in_set(FighterEventSet::Act),
+            (update_state_for_frame_count, consume_action_events, emit_animation_update)
+                .chain()
+                .in_set(FighterEventSet::Act),
         );
     }
 }
