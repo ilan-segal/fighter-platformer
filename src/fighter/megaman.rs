@@ -1,16 +1,16 @@
 use super::{FighterProperties, FighterState};
-use bevy::prelude::*;
+use bevy::{ecs::component::StorageType, prelude::*};
 
 use crate::{
     fighter::{FighterEventSet, FighterStateUpdate},
     hitbox::{Hitbox, HitboxBundle, HitboxGroup, HitboxGroupBundle, HitboxPurpose, Shape},
     input::{Action, Buffer},
-    utils::{FrameCount, FrameNumber},
+    utils::{Facing, FrameCount, FrameNumber, LeftRight, Lifetime},
     AnimationIndices, AnimationUpdate, AnimationUpdateEvent, Velocity,
 };
 
-const ATTACK_DURATION: FrameNumber = 20;
-const ATTACK_EMIT_LEMON: FrameNumber = 10;
+const ATTACK_DURATION: FrameNumber = 10;
+const ATTACK_SHOOT_FRAME: FrameNumber = 5;
 
 #[derive(Component)]
 pub struct MegaMan;
@@ -74,7 +74,6 @@ fn consume_action_events(
     mut commands: Commands,
 ) {
     for (e, state, buffer) in q.iter() {
-        debug!("{:?}", buffer);
         if let Some(new_state) = get_action_transition(state, &buffer.action) {
             ev_state.send(FighterStateUpdate(e, new_state));
             commands.entity(e).remove::<Buffer>();
@@ -168,14 +167,131 @@ fn animation_for_state(state: &FighterState) -> Option<AnimationUpdate> {
     }
 }
 
+#[derive(Resource)]
+struct LemonSprite(Option<Handle<Image>>);
+
+fn load_lemon_sprite(mut res: ResMut<LemonSprite>, asset_server: Res<AssetServer>) {
+    res.0 = Some(asset_server.load("sprites/megaman/lemon.png"));
+}
+
+struct Lemon {
+    owner: Entity,
+}
+
+impl Component for Lemon {
+    const STORAGE_TYPE: StorageType = StorageType::Table;
+
+    fn register_component_hooks(hooks: &mut bevy::ecs::component::ComponentHooks) {
+        hooks.on_remove(|mut world, entity, _| {
+            let lemon = world
+                .get::<Lemon>(entity)
+                .expect("Lemon entity about to be despawned");
+            let Some(mut lemon_count) = world.get_mut::<LemonCount>(lemon.owner) else {
+                return;
+            };
+            if lemon_count.0 > 0 {
+                lemon_count.0 -= 1;
+            }
+        });
+    }
+}
+
+#[derive(Bundle)]
+struct LemonBundle {
+    lemon: Lemon,
+    sprite: SpriteBundle,
+    velocity: Velocity,
+    lifetime: Lifetime,
+    // TODO: Damaging hitbox
+}
+
+const LEMON_VELOCITY: f32 = 7.5;
+const LEMON_DISTANCE: f32 = 300.0;
+
+impl LemonBundle {
+    fn new(owner: Entity, texture: Handle<Image>, facing: &Facing, transform: Transform) -> Self {
+        let vx = match facing.0 {
+            LeftRight::Left => -LEMON_VELOCITY,
+            LeftRight::Right => LEMON_VELOCITY,
+        };
+        let lifetime = (LEMON_DISTANCE / LEMON_VELOCITY) as FrameNumber;
+        LemonBundle {
+            lemon: Lemon { owner },
+            sprite: SpriteBundle {
+                texture,
+                transform,
+                ..Default::default()
+            },
+            velocity: Velocity(Vec2::new(vx, 0.0)),
+            lifetime: Lifetime(lifetime),
+        }
+    }
+}
+
+#[derive(Component)]
+struct LemonCount(u8);
+
+const MAX_LEMONS_AT_A_TIME: u8 = 3;
+
+fn shoot_lemon(
+    mut commands: Commands,
+    mut q: Query<(
+        Entity,
+        &FighterState,
+        &FrameCount,
+        &GlobalTransform,
+        &Facing,
+        Option<&mut LemonCount>,
+    )>,
+    lemon_sprite: Res<LemonSprite>,
+) {
+    for (entity, state, FrameCount(frame), global_transform, facing, lemon_count) in q.iter_mut() {
+        if state != &FighterState::Attack || frame != &ATTACK_SHOOT_FRAME {
+            continue;
+        }
+
+        match lemon_count {
+            Some(count) if count.0 >= MAX_LEMONS_AT_A_TIME => {
+                continue;
+            }
+            Some(mut count) => {
+                count.0 += 1;
+            }
+            None => {
+                commands
+                    .entity(entity)
+                    .insert(LemonCount(1));
+            }
+        }
+
+        let lemon_position = Vec3::new(20.0, 23.0, 0.0);
+        let mut transform = global_transform.compute_transform();
+        transform.translation += lemon_position * transform.scale;
+
+        commands.spawn(LemonBundle::new(
+            entity,
+            lemon_sprite.0.clone().unwrap(),
+            facing,
+            transform,
+        ));
+    }
+}
+
 pub struct MegaManPlugin;
 impl Plugin for MegaManPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            FixedUpdate,
-            (update_state_for_frame_count, consume_action_events, emit_animation_update)
-                .chain()
-                .in_set(FighterEventSet::Act),
-        );
+        app.insert_resource(LemonSprite(None))
+            .add_systems(Startup, load_lemon_sprite)
+            .add_systems(
+                FixedUpdate,
+                (
+                    update_state_for_frame_count,
+                    shoot_lemon,
+                    consume_action_events,
+                    emit_animation_update,
+                )
+                    .chain()
+                    .in_set(FighterEventSet::Act),
+            );
     }
 }

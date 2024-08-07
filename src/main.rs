@@ -40,6 +40,7 @@ fn main() {
             physics::PhysicsPlugin,
             hitbox::HitboxPlugin,
             utils::DebugPlugin,
+            utils::LifetimePlugin,
         ))
         .insert_resource(Time::<Fixed>::from_hz(FRAMES_PER_SECOND as f64))
         .add_systems(Startup, setup)

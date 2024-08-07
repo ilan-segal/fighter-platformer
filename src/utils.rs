@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 
-pub type FrameNumber = usize;
+use crate::fighter::FighterEventSet;
+
+pub type FrameNumber = u32;
 
 #[derive(Component)]
 pub struct FrameCount(pub FrameNumber);
@@ -120,6 +122,29 @@ impl Plugin for DebugPlugin {
                 show_debug_entities.run_if(in_debug_mode),
                 hide_debug_entities.run_if(not_in_debug_mode),
             ),
+        );
+    }
+}
+
+#[derive(Component)]
+pub struct Lifetime(pub FrameNumber);
+
+fn decrement_lifetime(mut commands: Commands, mut q: Query<(Entity, &mut Lifetime)>) {
+    for (entity, mut lifetime) in q.iter_mut() {
+        lifetime.0 -= 1;
+        if lifetime.0 == 0 {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+pub struct LifetimePlugin;
+
+impl Plugin for LifetimePlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            FixedUpdate,
+            decrement_lifetime.after(FighterEventSet::React),
         );
     }
 }

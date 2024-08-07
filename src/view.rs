@@ -1,17 +1,17 @@
 use bevy::prelude::*;
 
 use crate::fighter::Intangible;
-use crate::utils::{Facing, FrameCount, FrameNumber, LeftRight};
+use crate::utils::{Facing, FrameCount, LeftRight};
 
 #[derive(Component, Clone, Debug, PartialEq, Eq)]
 pub struct AnimationIndices {
-    pub first: FrameNumber,
-    pub last: FrameNumber,
+    pub first: usize,
+    pub last: usize,
 }
 
 #[derive(Debug)]
 pub enum AnimationUpdate {
-    SingleFrame(FrameNumber),
+    SingleFrame(usize),
     MultiFrame {
         indices: AnimationIndices,
         seconds_per_frame: f32,

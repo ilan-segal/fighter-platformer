@@ -107,7 +107,7 @@ fn update_control_state_from_gamepad(
         control
             .previous_stick_positions
             .push_back(cur_stick);
-        if control.previous_stick_positions.len() > SMASH_INPUT_MAX_DURATION {
+        if control.previous_stick_positions.len() > SMASH_INPUT_MAX_DURATION as usize {
             control
                 .previous_stick_positions
                 .pop_front();
