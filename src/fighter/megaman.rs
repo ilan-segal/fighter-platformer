@@ -3,7 +3,9 @@ use bevy::{ecs::component::StorageType, prelude::*};
 
 use crate::{
     fighter::{FighterEventSet, FighterStateUpdate},
-    hitbox::{Hitbox, HitboxBundle, HitboxGroup, HitboxGroupBundle, HitboxPurpose, Shape},
+    hitbox::{
+        Hitbox, HitboxBundle, HitboxGroup, HitboxGroupBundle, HitboxPurpose, KnockbackAngle, Shape,
+    },
     input::{Action, Buffer},
     utils::{Facing, FrameCount, FrameNumber, LeftRight, Lifetime},
     AnimationIndices, AnimationUpdate, AnimationUpdateEvent, Velocity,
@@ -202,7 +204,7 @@ struct LemonBundle {
     sprite: SpriteBundle,
     velocity: Velocity,
     lifetime: Lifetime,
-    // TODO: Damaging hitbox
+    hitbox_group: HitboxGroup,
 }
 
 const LEMON_VELOCITY: f32 = 7.5;
@@ -224,6 +226,7 @@ impl LemonBundle {
             },
             velocity: Velocity(Vec2::new(vx, 0.0)),
             lifetime: Lifetime(lifetime),
+            hitbox_group: HitboxGroup,
         }
     }
 }
@@ -264,16 +267,30 @@ fn shoot_lemon(
             }
         }
 
-        let lemon_position = Vec3::new(20.0, 23.0, 0.0);
+        let lemon_position = Vec3::new(20.0, 23.0, 10.0);
         let mut transform = global_transform.compute_transform();
         transform.translation += lemon_position * transform.scale;
 
-        commands.spawn(LemonBundle::new(
-            entity,
-            lemon_sprite.0.clone().unwrap(),
-            facing,
-            transform,
-        ));
+        commands
+            .spawn(LemonBundle::new(
+                entity,
+                lemon_sprite.0.clone().unwrap(),
+                facing,
+                transform,
+            ))
+            .with_children(|parent| {
+                parent.spawn(HitboxBundle {
+                    transform: TransformBundle::default(),
+                    hitbox: Hitbox {
+                        shape: Shape::Circle(5.0),
+                        purpose: HitboxPurpose::Damage {
+                            base_knockback: 0.1,
+                            scale_knockback: 0.1,
+                            angle: KnockbackAngle::Fixed(0.0),
+                        },
+                    },
+                });
+            });
     }
 }
 

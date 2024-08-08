@@ -230,6 +230,19 @@ fn intersection_of_line_segments(p1: &Vec2, p2: &Vec2, q1: &Vec2, q2: &Vec2) -> 
 pub enum HitboxPurpose {
     #[default]
     Body,
+    #[allow(dead_code)]
+    Damage {
+        base_knockback: f32,
+        scale_knockback: f32,
+        angle: KnockbackAngle,
+    },
+}
+
+#[allow(dead_code)]
+pub enum KnockbackAngle {
+    Fixed(f32),
+    Away,
+    UpAndAway,
 }
 
 #[derive(Component, Default)]
@@ -259,7 +272,9 @@ fn despawn_empty_hitbox_groups(
 ) {
     for (entity, children) in query.iter() {
         if children.iter().len() == 0 {
-            commands.entity(entity).despawn();
+            commands
+                .entity(entity)
+                .despawn_recursive();
         }
     }
 }
@@ -284,7 +299,8 @@ fn add_mesh_to_hitboxes(
             }
         };
         let colour = match hitbox.purpose {
-            HitboxPurpose::Body => Color::linear_rgba(0.05, 0.9, 0.05, 0.75),
+            HitboxPurpose::Body => Color::linear_rgba(0.05, 0.9, 0.05, 0.5),
+            HitboxPurpose::Damage { .. } => Color::linear_rgba(1.0, 0.1, 0.1, 0.5),
         };
 
         commands.entity(e).insert((
@@ -293,6 +309,7 @@ fn add_mesh_to_hitboxes(
                 material: materials.add(colour),
                 transform: *transform,
                 global_transform: GlobalTransform::default(),
+                visibility: Visibility::Hidden,
                 ..default()
             },
             VisibleDuringDebug,

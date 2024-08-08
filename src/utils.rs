@@ -133,7 +133,9 @@ fn decrement_lifetime(mut commands: Commands, mut q: Query<(Entity, &mut Lifetim
     for (entity, mut lifetime) in q.iter_mut() {
         lifetime.0 -= 1;
         if lifetime.0 == 0 {
-            commands.entity(entity).despawn();
+            commands
+                .entity(entity)
+                .despawn_recursive();
         }
     }
 }
