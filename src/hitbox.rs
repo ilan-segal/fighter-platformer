@@ -88,13 +88,14 @@ impl Shape {
                 };
             }
             (
-                Shape::Circle(r1),
+                Shape::Circle(r),
                 Shape::Pill {
                     major_radius,
                     minor_radius,
                 },
             ) => {
                 let c = t1.translation.xy();
+                let r1 = r * t1.scale.x.abs();
                 let (r2, a, b) = get_pill_geometric_data(*major_radius, *minor_radius, t2);
                 // Distance to endpoints
                 let d_a = (c - a).length();
