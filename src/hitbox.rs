@@ -5,9 +5,10 @@ use bevy::{
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
 use itertools::Itertools;
+use std::collections::HashSet;
 
-#[derive(Debug)]
-struct NearestPass {
+#[derive(Debug, Clone, Copy)]
+pub struct NearestPass {
     #[allow(dead_code)]
     midpoint: Vec2,
     distance: f32,
@@ -226,7 +227,7 @@ fn intersection_of_line_segments(p1: &Vec2, p2: &Vec2, q1: &Vec2, q2: &Vec2) -> 
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 pub enum HitboxPurpose {
     #[default]
     Body,
@@ -238,6 +239,7 @@ pub enum HitboxPurpose {
     },
 }
 
+#[derive(Clone, Copy)]
 #[allow(dead_code)]
 pub enum KnockbackAngle {
     Fixed(f32),
@@ -245,7 +247,7 @@ pub enum KnockbackAngle {
     UpAndAway,
 }
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Clone, Copy)]
 pub struct Hitbox {
     pub shape: Shape,
     pub purpose: HitboxPurpose,
@@ -258,7 +260,17 @@ pub struct HitboxBundle {
 }
 
 #[derive(Component, Default)]
-pub struct HitboxGroup;
+pub struct HitboxGroup {
+    ignored: HashSet<Entity>,
+}
+
+impl HitboxGroup {
+    pub fn ignoring(entity: &Entity) -> Self {
+        HitboxGroup {
+            ignored: HashSet::from([*entity]),
+        }
+    }
+}
 
 #[derive(Bundle, Default)]
 pub struct HitboxGroupBundle {
@@ -317,11 +329,25 @@ fn add_mesh_to_hitboxes(
     }
 }
 
+#[derive(Event)]
+#[allow(dead_code)]
+pub struct HitboxCollision {
+    pub target: Entity,
+    pub target_hitbox: Hitbox,
+    pub other_hitbox: Hitbox,
+    pub nearest_pass: NearestPass,
+}
+
 fn detect_hitbox_overlaps(
-    q_hitbox_groups: Query<(Entity, &Children), With<HitboxGroup>>,
+    mut q_hitbox_groups: Query<(Entity, &Children, &mut HitboxGroup)>,
     q_hitboxes: Query<(&Hitbox, &GlobalTransform)>,
+    mut ev_hitbox_collision: EventWriter<HitboxCollision>,
 ) {
-    for [(e1, children_1), (e2, children_2)] in q_hitbox_groups.iter_combinations() {
+    let mut iter = q_hitbox_groups.iter_combinations_mut();
+    while let Some([(e1, children_1, group_1), (e2, children_2, group_2)]) = iter.fetch_next() {
+        if group_1.ignored.contains(&e2) || group_2.ignored.contains(&e1) {
+            continue;
+        }
         let hitboxes_1 = children_1
             .iter()
             .filter_map(|child_id| q_hitboxes.get(*child_id).ok());
@@ -335,18 +361,28 @@ fn detect_hitbox_overlaps(
                 These calls to compute_transform could theoretically fail,
                 but this should never happen in practice.
                  */
-                (
-                    h1.shape,
-                    gt1.compute_transform(),
-                    h2.shape,
-                    gt2.compute_transform(),
-                )
+                (h1, gt1.compute_transform(), h2, gt2.compute_transform())
             })
-            .map(|(s1, t1, s2, t2)| Shape::nearest_pass(&s1, &t1, &s2, &t2))
-            .filter(|pass| pass.is_collision())
-            .reduce(std::cmp::min);
-        if let Some(nearest_pass) = maybe_overlap {
+            .map(|(h1, t1, h2, t2)| (Shape::nearest_pass(&h1.shape, &t1, &h2.shape, &t2), h1, h2))
+            .filter(|(pass, ..)| pass.is_collision())
+            .reduce(|pass_1, pass_2| if pass_1.0 < pass_2.0 { pass_1 } else { pass_2 });
+        if let Some((nearest_pass, h1, h2)) = maybe_overlap {
             debug!("Overlap between {:?}, {:?}: {:?}", e1, e2, nearest_pass);
+            // group_1.ignored.insert(e2);
+            // group_2.ignored.insert(e1);
+
+            ev_hitbox_collision.send(HitboxCollision {
+                target: e1,
+                target_hitbox: *h1,
+                other_hitbox: *h2,
+                nearest_pass,
+            });
+            ev_hitbox_collision.send(HitboxCollision {
+                target: e2,
+                target_hitbox: *h2,
+                other_hitbox: *h1,
+                nearest_pass,
+            });
         }
     }
 }
@@ -360,8 +396,9 @@ impl Plugin for HitboxPlugin {
                 FixedUpdate,
                 (
                     detect_hitbox_overlaps.after(FighterEventSet::Act),
-                    despawn_empty_hitbox_groups.after(FighterEventSet::React),
+                    despawn_empty_hitbox_groups,
                 ),
-            );
+            )
+            .add_event::<HitboxCollision>();
     }
 }

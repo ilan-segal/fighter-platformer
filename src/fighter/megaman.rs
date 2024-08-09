@@ -7,6 +7,7 @@ use crate::{
         Hitbox, HitboxBundle, HitboxGroup, HitboxGroupBundle, HitboxPurpose, KnockbackAngle, Shape,
     },
     input::{Action, Buffer},
+    projectile::Projectile,
     utils::{Facing, FrameCount, FrameNumber, LeftRight, Lifetime},
     AnimationIndices, AnimationUpdate, AnimationUpdateEvent, Velocity,
 };
@@ -205,6 +206,7 @@ struct LemonBundle {
     velocity: Velocity,
     lifetime: Lifetime,
     hitbox_group: HitboxGroup,
+    projectile: Projectile,
 }
 
 const LEMON_VELOCITY: f32 = 7.5;
@@ -226,7 +228,8 @@ impl LemonBundle {
             },
             velocity: Velocity(Vec2::new(vx, 0.0)),
             lifetime: Lifetime(lifetime),
-            hitbox_group: HitboxGroup,
+            hitbox_group: HitboxGroup::ignoring(&owner),
+            projectile: Projectile,
         }
     }
 }

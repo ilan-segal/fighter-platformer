@@ -9,6 +9,7 @@ mod fighter;
 mod hitbox;
 mod input;
 mod physics;
+mod projectile;
 mod utils;
 mod view;
 
@@ -41,6 +42,7 @@ fn main() {
             hitbox::HitboxPlugin,
             utils::DebugPlugin,
             utils::LifetimePlugin,
+            projectile::ProjectilePlugin,
         ))
         .insert_resource(Time::<Fixed>::from_hz(FRAMES_PER_SECOND as f64))
         .add_systems(Startup, setup)
