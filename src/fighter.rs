@@ -1,9 +1,6 @@
 use std::f32::consts::PI;
 
-use bevy::{
-    ecs::component::{ComponentHooks, StorageType},
-    prelude::*,
-};
+use bevy::prelude::*;
 
 use crate::{
     hitbox::{HitboxCollision, HitboxPurpose, KnockbackAngle},
@@ -117,7 +114,7 @@ impl Default for FighterProperties {
             gravity: -0.3,
             dash_duration: 10,
             land_crouch_duration: 6,
-            jumpsquat_duration: 4,
+            jumpsquat_duration: 5,
             turnaround_duration: TURNAROUND_DURATION_FRAMES,
             run_turnaround_duration: RUN_TURNAROUND_DURATION_FRAMES,
             airdodge_duration: AIRDODGE_DURATION_FRAMES,
@@ -151,6 +148,140 @@ fn update_fighter_state(
     }
 }
 
+fn transition_from_land_crouch(
+    q: Query<(&FighterState, &FighterProperties, &FrameCount, Entity)>,
+    mut ev_state: EventWriter<FighterStateUpdate>,
+) {
+    for (state, props, FrameCount(frame), entity) in q.iter() {
+        if state != &FighterState::LandCrouch {
+            continue;
+        }
+        if frame != &props.land_crouch_duration {
+            continue;
+        }
+        ev_state.send(FighterStateUpdate(entity, FighterState::Idle));
+    }
+}
+
+fn transition_from_dash(
+    q: Query<(&FighterState, &FighterProperties, &FrameCount, Entity)>,
+    mut ev_state: EventWriter<FighterStateUpdate>,
+) {
+    for (state, props, FrameCount(frame), entity) in q.iter() {
+        if state != &FighterState::Dash {
+            continue;
+        }
+        if frame != &props.dash_duration {
+            continue;
+        }
+        ev_state.send(FighterStateUpdate(entity, FighterState::Run));
+    }
+}
+
+fn transition_from_turnaround(
+    mut q: Query<(
+        &FighterState,
+        &FighterProperties,
+        &FrameCount,
+        &mut Facing,
+        Entity,
+    )>,
+    mut ev_state: EventWriter<FighterStateUpdate>,
+) {
+    for (state, props, FrameCount(frame), mut facing, entity) in q.iter_mut() {
+        if state != &FighterState::Turnaround {
+            continue;
+        }
+        if frame == &props.turnaround_duration {
+            ev_state.send(FighterStateUpdate(entity, FighterState::Idle));
+        } else if *frame == props.turnaround_duration / 2 {
+            facing.0 = facing.0.flip();
+        }
+    }
+}
+
+fn transition_from_run_turnaround(
+    mut q: Query<(
+        &FighterState,
+        &FighterProperties,
+        &FrameCount,
+        &mut Facing,
+        Entity,
+    )>,
+    mut ev_state: EventWriter<FighterStateUpdate>,
+) {
+    for (state, props, FrameCount(frame), mut facing, entity) in q.iter_mut() {
+        if state != &FighterState::RunTurnaround {
+            continue;
+        }
+        if frame == &props.run_turnaround_duration {
+            ev_state.send(FighterStateUpdate(entity, FighterState::Run));
+        } else if *frame == props.run_turnaround_duration / 2 {
+            facing.0 = facing.0.flip();
+        }
+    }
+}
+
+fn transition_from_airdodge(
+    q: Query<(&FighterState, &FighterProperties, &FrameCount, Entity)>,
+    mut ev_state: EventWriter<FighterStateUpdate>,
+    mut ev_set_velocity: EventWriter<SetVelocity>,
+) {
+    for (state, props, FrameCount(frame), entity) in q.iter() {
+        if state != &FighterState::Airdodge {
+            continue;
+        }
+        if frame != &props.airdodge_duration {
+            continue;
+        }
+        ev_set_velocity.send(SetVelocity(entity, Vec2::ZERO));
+        ev_state.send(FighterStateUpdate(entity, FighterState::IdleAirborne));
+    }
+}
+
+fn transition_from_jumpsquat(
+    q: Query<(
+        Entity,
+        &FighterState,
+        &FighterProperties,
+        &FrameCount,
+        &Control,
+    )>,
+    mut ev_state: EventWriter<FighterStateUpdate>,
+    mut ev_add_velocity: EventWriter<AddVelocity>,
+    mut ev_set_velocity: EventWriter<SetVelocity>,
+) {
+    for (entity, state, props, FrameCount(frame), control) in q.iter() {
+        if state != &FighterState::JumpSquat {
+            continue;
+        }
+        if frame != &props.jumpsquat_duration {
+            continue;
+        }
+        if control
+            .held_actions
+            .contains(Action::Shield)
+        {
+            ev_state.send(FighterStateUpdate(entity, FighterState::LandCrouch));
+            ev_set_velocity.send(SetVelocity(
+                entity,
+                control.stick.normalize_or_zero() * AIRDODGE_INITIAL_SPEED,
+            ));
+            continue;
+        }
+        let jump_speed = if control
+            .held_actions
+            .contains(Action::Jump)
+        {
+            props.jump_speed
+        } else {
+            // Short-hop, half the max-height of a full-hop
+            props.jump_speed * 0.5_f32.sqrt()
+        };
+        ev_add_velocity.send(AddVelocity(entity, Vec2::new(0.0, jump_speed)));
+    }
+}
+
 fn compute_common_side_effects(
     mut query: Query<(
         Entity,
@@ -163,7 +294,6 @@ fn compute_common_side_effects(
     )>,
     mut ev_state: EventWriter<FighterStateUpdate>,
     mut ev_accelerate: EventWriter<AccelerateTowards>,
-    mut ev_add_velocity: EventWriter<AddVelocity>,
     mut ev_set_velocity: EventWriter<SetVelocity>,
     mut commands: Commands,
 ) {
@@ -172,47 +302,6 @@ fn compute_common_side_effects(
     {
         // Implementation-specific stuff
         match state {
-            FighterState::LandCrouch if frame.0 == properties.land_crouch_duration => {
-                ev_state.send(FighterStateUpdate(entity, FighterState::Idle));
-            }
-            FighterState::Dash if frame.0 == properties.dash_duration => {
-                ev_state.send(FighterStateUpdate(entity, FighterState::Run));
-            }
-            FighterState::Turnaround if frame.0 == properties.turnaround_duration => {
-                ev_state.send(FighterStateUpdate(entity, FighterState::Idle));
-            }
-            FighterState::Turnaround if frame.0 == properties.turnaround_duration / 2 => {
-                facing.0 = facing.0.flip();
-            }
-            FighterState::RunTurnaround if frame.0 == properties.run_turnaround_duration => {
-                ev_state.send(FighterStateUpdate(entity, FighterState::Run));
-            }
-            FighterState::RunTurnaround if frame.0 == properties.run_turnaround_duration / 2 => {
-                facing.0 = facing.0.flip();
-            }
-            FighterState::Airdodge if frame.0 == properties.airdodge_duration => {
-                ev_set_velocity.send(SetVelocity(entity, Vec2::ZERO));
-                ev_state.send(FighterStateUpdate(entity, FighterState::IdleAirborne));
-            }
-            FighterState::JumpSquat if frame.0 == properties.jumpsquat_duration => {
-                if control
-                    .held_actions
-                    .contains(Action::Shield)
-                {
-                    ev_state.send(FighterStateUpdate(entity, FighterState::Airdodge));
-                    return;
-                }
-                let jump_speed = if control
-                    .held_actions
-                    .contains(Action::Jump)
-                {
-                    properties.jump_speed
-                } else {
-                    // Short-hop, half the max-height of a full-hop
-                    properties.jump_speed * 0.5_f32.sqrt()
-                };
-                ev_add_velocity.send(AddVelocity(entity, Vec2::new(0.0, jump_speed)));
-            }
             FighterState::Idle | FighterState::LandCrouch
                 if control.stick.y < -CROUCH_THRESHOLD =>
             {
@@ -464,7 +553,16 @@ impl Plugin for FighterPlugin {
             .add_systems(
                 FixedUpdate,
                 (
-                    compute_common_side_effects.in_set(FighterEventSet::Act),
+                    (
+                        transition_from_land_crouch,
+                        transition_from_dash,
+                        transition_from_turnaround,
+                        transition_from_run_turnaround,
+                        transition_from_airdodge,
+                        transition_from_jumpsquat,
+                        compute_common_side_effects,
+                    )
+                        .in_set(FighterEventSet::Act),
                     (
                         land,
                         go_airborne,
