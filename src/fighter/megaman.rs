@@ -283,13 +283,24 @@ fn shoot_lemon(
             ))
             .with_children(|parent| {
                 parent.spawn(HitboxBundle {
-                    transform: TransformBundle::default(),
+                    transform: TransformBundle {
+                        local: Transform::from_scale(Vec3::new(
+                            match facing.0 {
+                                LeftRight::Left => -1.0,
+                                LeftRight::Right => 1.0,
+                            },
+                            1.0,
+                            1.0,
+                        )),
+                        ..Default::default()
+                    },
                     hitbox: Hitbox {
                         shape: Shape::Circle(5.0),
                         purpose: HitboxPurpose::Damage {
+                            percent: 3.0,
                             base_knockback: 0.1,
-                            scale_knockback: 0.1,
-                            angle: KnockbackAngle::Fixed(0.0),
+                            scale_knockback: 5.0,
+                            angle: KnockbackAngle::Fixed(45.0),
                         },
                     },
                 });

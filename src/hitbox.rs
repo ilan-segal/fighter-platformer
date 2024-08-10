@@ -228,27 +228,26 @@ fn intersection_of_line_segments(p1: &Vec2, p2: &Vec2, q1: &Vec2, q2: &Vec2) -> 
     }
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, Debug)]
 pub enum HitboxPurpose {
     #[default]
     Body,
     #[allow(dead_code)]
     Damage {
+        percent: f32,
         base_knockback: f32,
         scale_knockback: f32,
         angle: KnockbackAngle,
     },
 }
 
-#[derive(Clone, Copy)]
-#[allow(dead_code)]
+// TODO: Other types of knockback
+#[derive(Clone, Copy, Debug)]
 pub enum KnockbackAngle {
-    Fixed(f32),
-    Away,
-    UpAndAway,
+    Fixed(f32), // Degrees, CW from positive y-axis (12 o'clock)
 }
 
-#[derive(Component, Default, Clone, Copy)]
+#[derive(Component, Default, Clone, Copy, Debug)]
 pub struct Hitbox {
     pub shape: Shape,
     pub purpose: HitboxPurpose,
@@ -330,23 +329,27 @@ fn add_mesh_to_hitboxes(
     }
 }
 
-#[derive(Event)]
+#[derive(Event, Debug)]
 #[allow(dead_code)]
 pub struct HitboxCollision {
     pub target: Entity,
     pub target_hitbox: Hitbox,
     pub other_hitbox: Hitbox,
+    pub other_transform: Transform,
     pub nearest_pass: NearestPass,
 }
 
 fn detect_hitbox_overlaps(
-    mut q_hitbox_groups: Query<(Entity, &Children, &mut HitboxGroup)>,
+    mut q_hitbox_groups: Query<(Entity, &Children, Option<&Parent>, &mut HitboxGroup)>,
     q_hitboxes: Query<(&Hitbox, &GlobalTransform)>,
     mut ev_hitbox_collision: EventWriter<HitboxCollision>,
 ) {
     let mut iter = q_hitbox_groups.iter_combinations_mut();
-    while let Some([(e1, children_1, group_1), (e2, children_2, group_2)]) = iter.fetch_next() {
-        if group_1.ignored.contains(&e2) || group_2.ignored.contains(&e1) {
+    while let Some(
+        [(group_id_1, children_1, parent_1, group_1), (group_id_2, children_2, parent_2, group_2)],
+    ) = iter.fetch_next()
+    {
+        if group_1.ignored.contains(&group_id_2) || group_2.ignored.contains(&group_id_1) {
             continue;
         }
         let hitboxes_1 = children_1
@@ -364,24 +367,41 @@ fn detect_hitbox_overlaps(
                  */
                 (h1, gt1.compute_transform(), h2, gt2.compute_transform())
             })
-            .map(|(h1, t1, h2, t2)| (Shape::nearest_pass(&h1.shape, &t1, &h2.shape, &t2), h1, h2))
+            .map(|(h1, t1, h2, t2)| {
+                (
+                    Shape::nearest_pass(&h1.shape, &t1, &h2.shape, &t2),
+                    h1,
+                    t1,
+                    h2,
+                    t2,
+                )
+            })
             .filter(|(pass, ..)| pass.is_collision())
             .reduce(|pass_1, pass_2| if pass_1.0 < pass_2.0 { pass_1 } else { pass_2 });
-        if let Some((nearest_pass, h1, h2)) = maybe_overlap {
-            debug!("Overlap between {:?}, {:?}: {:?}", e1, e2, nearest_pass);
+        if let Some((nearest_pass, h1, t1, h2, t2)) = maybe_overlap {
+            debug!(
+                "Overlap between {:?}, {:?}: {:?}",
+                group_id_1, group_id_2, nearest_pass,
+            );
             // group_1.ignored.insert(e2);
             // group_2.ignored.insert(e1);
 
             ev_hitbox_collision.send(HitboxCollision {
-                target: e1,
+                target: parent_1
+                    .map(Parent::get)
+                    .unwrap_or(group_id_1),
                 target_hitbox: *h1,
                 other_hitbox: *h2,
+                other_transform: t2,
                 nearest_pass,
             });
             ev_hitbox_collision.send(HitboxCollision {
-                target: e2,
+                target: parent_2
+                    .map(Parent::get)
+                    .unwrap_or(group_id_2),
                 target_hitbox: *h2,
                 other_hitbox: *h1,
+                other_transform: t1,
                 nearest_pass,
             });
         }

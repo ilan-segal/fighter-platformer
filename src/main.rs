@@ -13,7 +13,9 @@ mod projectile;
 mod utils;
 mod view;
 
-use fighter::{megaman::MegaMan, FighterBundle, FighterEventSet, Player as PlayerId};
+use fighter::{
+    megaman::MegaMan, FighterBundle, FighterEventSet, Percent, Player as PlayerId, Weight,
+};
 use physics::*;
 use utils::{DebugMode, Facing, FrameCount, FrameNumber, LeftRight, VisibleDuringDebug};
 use view::*;
@@ -116,6 +118,8 @@ fn setup(
                 animation_timer: view::AnimationTimer(animation_timer.clone()),
                 control: Control::default(),
                 properties: MegaMan::get_properties(),
+                percent: Percent::default(),
+                weight: Weight::default(),
             },
             sprite_sheet_bundle.clone(),
             MegaMan,
@@ -133,6 +137,8 @@ fn setup(
                 animation_timer: view::AnimationTimer(animation_timer.clone()),
                 control: Control::default(),
                 properties: MegaMan::get_properties(),
+                percent: Percent::default(),
+                weight: Weight::default(),
             },
             sprite_sheet_bundle.clone(),
             MegaMan,

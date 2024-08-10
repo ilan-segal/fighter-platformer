@@ -1,6 +1,12 @@
-use bevy::prelude::*;
+use std::f32::consts::PI;
+
+use bevy::{
+    ecs::component::{ComponentHooks, StorageType},
+    prelude::*,
+};
 
 use crate::{
+    hitbox::{HitboxCollision, HitboxPurpose, KnockbackAngle},
     input::{Action, Control, DirectionalAction, DirectionalActionType},
     physics::{AddVelocity, Collision, Gravity, SetVelocity, Velocity},
     utils::{CardinalDirection, Directed, FrameCount, FrameNumber, LeftRight},
@@ -392,6 +398,56 @@ fn update_gravity(mut commands: Commands, q: Query<(Entity, &FighterState, &Figh
     })
 }
 
+#[derive(Component, Default)]
+pub struct Percent(f32);
+
+#[derive(Component)]
+pub struct Weight(f32);
+
+impl Default for Weight {
+    fn default() -> Self {
+        Weight(1.0)
+    }
+}
+
+fn take_damage_from_hitbox_collision(
+    mut q_fighter: Query<(Entity, &mut Percent, &Weight), With<FighterState>>,
+    mut ev_hitbox: EventReader<HitboxCollision>,
+    mut ev_set_velocity: EventWriter<SetVelocity>,
+) {
+    for hitbox_collision in ev_hitbox.read() {
+        debug!("{:?}", hitbox_collision);
+        let HitboxPurpose::Damage {
+            percent,
+            base_knockback,
+            scale_knockback,
+            angle,
+        } = hitbox_collision.other_hitbox.purpose
+        else {
+            continue;
+        };
+        let Ok((fighter_entity, mut fighter_percent, weight)) =
+            q_fighter.get_mut(hitbox_collision.target)
+        else {
+            continue;
+        };
+        fighter_percent.0 += percent;
+        let launch_speed =
+            weight.0.recip() * (base_knockback + (scale_knockback * fighter_percent.0) * 0.01);
+        let launch_angle = match angle {
+            // Converting CW degrees from 12 o'clock => standard form
+            KnockbackAngle::Fixed(theta) => PI * 0.5 - theta.to_radians(),
+        };
+        let launch_velocity = Vec2::from_angle(launch_angle)
+            * launch_speed
+            * hitbox_collision
+                .other_transform
+                .scale
+                .xy();
+        ev_set_velocity.send(SetVelocity(fighter_entity, launch_velocity));
+    }
+}
+
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FighterEventSet {
     Act,
@@ -416,6 +472,7 @@ impl Plugin for FighterPlugin {
                         update_gravity,
                         remove_intangible,
                         add_intangible,
+                        take_damage_from_hitbox_collision,
                     )
                         .chain()
                         .in_set(FighterEventSet::React),
@@ -442,4 +499,6 @@ pub struct FighterBundle {
     pub animation_indices: AnimationIndices,
     pub animation_timer: AnimationTimer,
     pub control: Control,
+    pub percent: Percent,
+    pub weight: Weight,
 }
