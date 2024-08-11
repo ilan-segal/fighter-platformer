@@ -6,6 +6,7 @@ use input::{Control, InputSet};
 use iyes_perf_ui::prelude::*;
 
 mod fighter;
+mod fighter_state;
 mod hitbox;
 mod input;
 mod physics;
@@ -14,9 +15,10 @@ mod utils;
 mod view;
 
 use fighter::{
-    megaman::MegaMan, FighterBundle, FighterEventSet, FighterStateTransition, JumpSpeed, Percent,
-    Player as PlayerId, Traction, Weight,
+    megaman::MegaMan, DashSpeed, FighterBundle, FighterEventSet, JumpSpeed, Percent,
+    Player as PlayerId, RunSpeed, Traction, Weight,
 };
+use fighter_state::FighterStateTransition;
 use physics::*;
 use utils::{DebugMode, Facing, FrameCount, FrameNumber, LeftRight, VisibleDuringDebug};
 use view::*;
@@ -114,7 +116,7 @@ fn setup(
                 frame: FrameCount(0),
                 facing: Facing(LeftRight::Right),
                 velocity: Velocity(Vec2::new(5.0, 0.0)),
-                state: fighter::FighterState::default(),
+                state: fighter_state::FighterState::default(),
                 state_transition_properties: FighterStateTransition::default(),
                 animation_indices: animation_indices.clone(),
                 animation_timer: view::AnimationTimer(animation_timer.clone()),
@@ -124,6 +126,8 @@ fn setup(
                 weight: Weight::default(),
                 traction: Traction(fighter::megaman::MEGAMAN_TRACTION),
                 jump_speed: JumpSpeed(fighter::megaman::MEGAMAN_JUMP_SPEED),
+                dash_speed: DashSpeed(fighter::megaman::MEGAMAN_DASH_SPEED),
+                run_speed: RunSpeed(fighter::megaman::MEGAMAN_DASH_SPEED),
             },
             sprite_sheet_bundle.clone(),
             MegaMan,

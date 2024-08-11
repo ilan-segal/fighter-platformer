@@ -14,14 +14,21 @@ pub enum LeftRight {
     Right,
 }
 
-// impl LeftRight {
-//     pub fn flip(&self) -> Self {
-//         match self {
-//             LeftRight::Left => LeftRight::Right,
-//             LeftRight::Right => LeftRight::Left,
-//         }
-//     }
-// }
+impl LeftRight {
+    // pub fn flip(&self) -> Self {
+    //     match self {
+    //         LeftRight::Left => LeftRight::Right,
+    //         LeftRight::Right => LeftRight::Left,
+    //     }
+    // }
+
+    pub fn get_sign(&self) -> f32 {
+        match self {
+            LeftRight::Left => -1.0,
+            LeftRight::Right => 1.0,
+        }
+    }
+}
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum CardinalDirection {

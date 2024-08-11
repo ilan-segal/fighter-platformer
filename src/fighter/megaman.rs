@@ -1,10 +1,9 @@
-use super::{
-    update_fighter_state, FighterProperties, FighterState, FighterStateTransition, StateEnd,
-};
+use super::{update_fighter_state, FighterProperties, FighterState, FighterStateTransition};
 use bevy::{ecs::component::StorageType, prelude::*};
 
 use crate::{
-    fighter::{FighterEventSet, FighterStateUpdate, IASA},
+    fighter::{FighterEventSet, FighterStateUpdate},
+    fighter_state::{StateEnd, IASA},
     hitbox::{
         Hitbox, HitboxBundle, HitboxGroup, HitboxGroupBundle, HitboxPurpose, KnockbackAngle, Shape,
     },
@@ -18,8 +17,9 @@ const ATTACK_DURATION: FrameNumber = 20;
 const ATTACK_SHOOT_FRAME: FrameNumber = 5;
 const ATTACK_IASA: FrameNumber = 10;
 
-pub const MEGAMAN_TRACTION: f32 = 0.3;
+pub const MEGAMAN_TRACTION: f32 = 0.5;
 pub const MEGAMAN_JUMP_SPEED: f32 = 10.0;
+pub const MEGAMAN_DASH_SPEED: f32 = 5.0;
 
 #[derive(Component)]
 pub struct MegaMan;
@@ -28,8 +28,6 @@ impl MegaMan {
     pub fn get_properties() -> FighterProperties {
         FighterProperties {
             walk_speed: 3.0,
-            dash_speed: 5.0,
-            jump_speed: 10.0,
             ground_friction: 0.3,
             gravity: -0.3,
             dash_duration: 10,

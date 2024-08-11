@@ -3,314 +3,29 @@ use std::f32::consts::PI;
 use bevy::{ecs::world::DeferredWorld, prelude::*};
 
 use crate::{
+    fighter_state::{
+        apply_state_transition, FighterState, FighterStateTransition, AIRDODGE_DURATION_FRAMES,
+        AIRDODGE_INITIAL_SPEED, DEFAULT_JUMP_SQUAT_DURATION,
+    },
     hitbox::{HitboxCollision, HitboxPurpose, KnockbackAngle},
     input::{Action, BufferedInput, Control, DirectionalAction},
     physics::{Collision, Gravity, SetVelocity, Velocity},
-    utils::{FrameCount, FrameNumber},
+    utils::{Directed, FrameCount, FrameNumber},
     Airborne, AnimationIndices, AnimationTimer, Facing, PhysicsSet,
 };
 
 pub mod megaman;
 
 // Control thresholds
-const CROUCH_THRESHOLD: f32 = 0.4;
+pub const CROUCH_THRESHOLD: f32 = 0.4;
 
 #[derive(Component)]
 pub struct Player(pub usize);
-
-#[derive(Component, Clone, Copy, Default, Debug, PartialEq)]
-pub enum FighterState {
-    #[default]
-    Idle,
-    Crouch,
-    EnterCrouch,
-    ExitCrouch,
-    Turnaround,
-    RunTurnaround,
-    LandCrouch,
-    IdleAirborne,
-    JumpSquat,
-    Walk,
-    Dash,
-    Run,
-    // Ensures that the player cannot Dash out of a Run by going Run -> Idle -> Dash
-    RunEnd,
-    Airdodge(Vec2),
-    Attack,
-}
-
-impl FighterState {
-    fn is_intangible(&self, frame: &FrameNumber) -> bool {
-        match self {
-            Self::Airdodge(..) => {
-                &AIRDODGE_INTANGIBLE_START <= frame && frame <= &AIRDODGE_INTANGIBLE_END
-            }
-            _ => false,
-        }
-    }
-    fn is_grounded(&self) -> bool {
-        match self {
-            Self::Idle
-            | Self::LandCrouch
-            | Self::JumpSquat
-            | Self::Walk
-            | Self::Turnaround
-            | Self::RunTurnaround
-            | Self::RunEnd
-            | Self::Dash
-            | Self::Run
-            | Self::Crouch
-            | Self::EnterCrouch
-            | Self::ExitCrouch => true,
-            _ => false,
-        }
-    }
-    fn is_exempt_from_normal_traction(&self) -> bool {
-        match self {
-            Self::JumpSquat | Self::Walk | Self::Run | Self::Dash => true,
-            _ => false,
-        }
-    }
-    fn is_affected_by_gravity(&self) -> bool {
-        match self {
-            Self::Airdodge(..) => false,
-            _ => true,
-        }
-    }
-}
-
-#[derive(Component, Default, Debug)]
-pub struct FighterStateTransition {
-    end: StateEnd,
-    // faf: Option<FrameNumber>,
-    iasa: Option<IASA>,
-}
-
-const AIRDODGE_INITIAL_SPEED: f32 = 10.0;
-const AIRDODGE_DURATION_FRAMES: FrameNumber = 15;
-const AIRDODGE_INTANGIBLE_START: FrameNumber = 4;
-const AIRDODGE_INTANGIBLE_END: FrameNumber = 15;
-const TURNAROUND_DURATION_FRAMES: FrameNumber = 7;
-const RUN_TURNAROUND_DURATION_FRAMES: FrameNumber = 8;
-const CROUCH_TRANSITION_THRESHOLD_FRAME: FrameNumber = 6;
-
-const DEFAULT_LAND_CROUCH_DURATION: FrameNumber = 4;
-const DEFAULT_JUMP_SQUAT_DURATION: FrameNumber = 6;
-const DEFAULT_DASH_DURATION: FrameNumber = 15;
-
-impl FighterStateTransition {
-    fn _default_idle_interrupt() -> StateGetter {
-        |_, control, _| {
-            if control.has_action(&Action::Jump) {
-                return Some(FighterState::JumpSquat);
-            }
-            if control.stick.y < -CROUCH_THRESHOLD {
-                return Some(FighterState::EnterCrouch);
-            }
-            None
-        }
-    }
-
-    fn default_for_state(state: &FighterState) -> Self {
-        match state {
-            FighterState::Idle => Self {
-                end: StateEnd::None,
-                iasa: IASA::immediate(Self::_default_idle_interrupt()),
-            },
-
-            FighterState::EnterCrouch => Self {
-                end: StateEnd::OnFrame {
-                    frame: CROUCH_TRANSITION_THRESHOLD_FRAME,
-                    next_state: FighterState::Crouch,
-                },
-                ..Default::default()
-            },
-
-            FighterState::Crouch => Self {
-                end: StateEnd::None,
-                iasa: IASA::immediate(|_, control, _| {
-                    if control.has_action(&Action::Jump) {
-                        Some(FighterState::JumpSquat)
-                    } else if control.stick.y > -CROUCH_THRESHOLD {
-                        Some(FighterState::ExitCrouch)
-                    } else {
-                        None
-                    }
-                }),
-            },
-
-            FighterState::ExitCrouch => Self {
-                end: StateEnd::idle_on_frame(CROUCH_TRANSITION_THRESHOLD_FRAME),
-                ..Default::default()
-            },
-
-            FighterState::LandCrouch => Self::idle_on_frame(DEFAULT_LAND_CROUCH_DURATION),
-
-            FighterState::JumpSquat => Self {
-                iasa: IASA::immediate(|_, control, _| {
-                    if control.has_action(&Action::Shield) {
-                        Some(FighterState::Airdodge(control.stick.normalize_or_zero()))
-                    } else {
-                        None
-                    }
-                }),
-                ..Default::default()
-            },
-
-            FighterState::IdleAirborne => Self {
-                iasa: IASA::immediate(|_, control, _| {
-                    if control.has_action(&Action::Shield) {
-                        Some(FighterState::Airdodge(control.stick.normalize_or_zero()))
-                    } else {
-                        None
-                    }
-                }),
-                ..Default::default()
-            },
-
-            FighterState::Airdodge(..) => Self {
-                end: StateEnd::OnFrame {
-                    frame: AIRDODGE_DURATION_FRAMES,
-                    next_state: FighterState::IdleAirborne,
-                },
-                ..Default::default()
-            },
-
-            FighterState::Dash => Self {
-                end: StateEnd::OnFrame {
-                    frame: DEFAULT_DASH_DURATION,
-                    next_state: FighterState::Run,
-                },
-                iasa: Some(IASA {
-                    frame: 0,
-                    state_getter: |entity, control, world| {
-                        // Dash -> Jump
-                        if let BufferedInput::Some { value, .. } = control.action
-                            && value == Action::Jump
-                        {
-                            return Some(FighterState::JumpSquat);
-                        }
-                        let player_facing = world
-                            .get::<Facing>(*entity)
-                            .expect("Player facing");
-                        // Dash -> Dash (in the other direction)
-                        if let BufferedInput::Some { value, .. } = control.directional_action
-                            && let DirectionalAction::Smash(cardinal) = value
-                            && let Some(input_facing) = cardinal.horizontal()
-                            && input_facing != player_facing.0
-                        {
-                            return Some(FighterState::Dash);
-                        }
-                        return None;
-                        // TODO: Dash attacks and stuff
-                    },
-                }),
-            },
-
-            _ => Self::default(),
-        }
-    }
-
-    fn idle_on_frame(frame: FrameNumber) -> Self {
-        Self {
-            end: StateEnd::idle_on_frame(frame),
-            iasa: IASA::new(frame, Self::_default_idle_interrupt()),
-        }
-    }
-}
-
-#[derive(Default, Debug)]
-pub enum StateEnd {
-    #[default]
-    None,
-    OnFrame {
-        frame: FrameNumber,
-        next_state: FighterState,
-    },
-}
-
-impl StateEnd {
-    fn idle_on_frame(frame: FrameNumber) -> Self {
-        StateEnd::OnFrame {
-            frame,
-            next_state: FighterState::Idle,
-        }
-    }
-}
-
-type StateGetter = fn(&Entity, &Control, &DeferredWorld) -> Option<FighterState>;
-
-// Interruptible As Soon As
-#[derive(Debug)]
-pub struct IASA {
-    frame: FrameNumber,
-    state_getter: StateGetter,
-}
-
-impl IASA {
-    fn new(frame: FrameNumber, state_getter: StateGetter) -> Option<Self> {
-        Some(IASA {
-            frame,
-            state_getter,
-        })
-    }
-
-    fn immediate(state_getter: StateGetter) -> Option<Self> {
-        Some(IASA {
-            frame: 0,
-            state_getter,
-        })
-    }
-}
-
-fn apply_state_transition(
-    mut q: Query<(
-        &FighterStateTransition,
-        &mut FrameCount,
-        &mut FighterState,
-        Entity,
-        &mut Control,
-    )>,
-    world: DeferredWorld,
-) {
-    for (props, mut state_frame, mut state, entity, mut control) in q.iter_mut() {
-        let frame_number = state_frame.0;
-
-        // Compute input for IASA condition
-        if let Some(new_state) = props
-            .iasa
-            .as_ref()
-            .filter(|iasa| iasa.frame <= frame_number)
-            .and_then(|iasa| (iasa.state_getter)(&entity, control.as_ref(), &world))
-        {
-            debug!(
-                "Interrupted {:?} on frame {:?} => {:?}",
-                *state, frame_number, new_state
-            );
-            *state = new_state;
-            state_frame.0 = 0;
-            control.clear_buffers();
-        }
-        // Compute natural state end
-        else if let StateEnd::OnFrame { frame, next_state } = props.end
-            && frame <= frame_number
-        {
-            debug!(
-                "{:?} ran out on frame {:?} => {:?}",
-                *state, frame_number, next_state
-            );
-            *state = next_state;
-            state_frame.0 = 0;
-        }
-    }
-}
 
 #[derive(Component)]
 #[allow(dead_code)]
 pub struct FighterProperties {
     walk_speed: f32,
-    dash_speed: f32,
-    jump_speed: f32,
     ground_friction: f32,
     gravity: f32,
     dash_duration: FrameNumber,
@@ -322,8 +37,6 @@ impl Default for FighterProperties {
     fn default() -> Self {
         Self {
             walk_speed: 3.0,
-            dash_speed: 5.0,
-            jump_speed: 10.0,
             ground_friction: 0.3,
             gravity: -0.3,
             dash_duration: 10,
@@ -389,8 +102,8 @@ fn apply_jump_speed(
     }
 }
 
-fn set_airdodge_speed(mut query: Query<(&mut Velocity, &FighterState, &FrameCount)>) {
-    for (mut v, s, f) in query.iter_mut() {
+fn set_airdodge_speed(mut query: Query<(&FighterState, &FrameCount, &mut Velocity)>) {
+    for (s, f, mut v) in query.iter_mut() {
         let FighterState::Airdodge(direction) = s else {
             continue;
         };
@@ -398,6 +111,63 @@ fn set_airdodge_speed(mut query: Query<(&mut Velocity, &FighterState, &FrameCoun
             v.0 = Vec2::ZERO;
         } else {
             v.0 = *direction * AIRDODGE_INITIAL_SPEED;
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct DashSpeed(pub f32);
+
+fn set_dash_speed(
+    mut query: Query<(
+        &FighterState,
+        &FrameCount,
+        &mut Facing,
+        &mut Velocity,
+        &DashSpeed,
+        &Control,
+    )>,
+) {
+    for (state, frame, mut facing, mut velocity, dash_speed, control) in query.iter_mut() {
+        if state != &FighterState::Dash {
+            continue;
+        }
+        if frame.0 != 0 {
+            continue;
+        }
+        let direction = control
+            .stick
+            .get_cardinal_direction()
+            .horizontal()
+            .expect("Horizontal input on first frame of dash");
+        facing.0 = direction;
+        velocity.0.x = dash_speed.0 * direction.get_sign();
+    }
+}
+
+#[derive(Component)]
+pub struct RunSpeed(pub f32);
+
+fn accelerate_to_run_speed(
+    mut query: Query<(&FighterState, &mut Velocity, &RunSpeed, &Traction, &Control)>,
+) {
+    for (state, mut velocity, run_speed, traction, control) in query.iter_mut() {
+        if state != &FighterState::Run {
+            continue;
+        }
+        let target_vx = control
+            .stick
+            .get_cardinal_direction()
+            .horizontal()
+            .expect("Horizontal input during run")
+            .get_sign()
+            * run_speed.0;
+        if (velocity.0.x - target_vx).abs() <= traction.0 {
+            velocity.0.x = target_vx;
+        } else if velocity.0.x < target_vx {
+            velocity.0.x += traction.0;
+        } else {
+            velocity.0.x -= traction.0;
         }
     }
 }
@@ -565,11 +335,14 @@ impl Plugin for FighterPlugin {
                             .chain()
                             .in_set(FighterEventSet::Act),
                         (
-                            land,
-                            go_airborne,
                             update_fighter_state,
                             apply_jump_speed,
+                            set_dash_speed,
+                            accelerate_to_run_speed,
+                            set_airdodge_speed,
                             update_gravity,
+                            land,
+                            go_airborne,
                             remove_intangible,
                             add_intangible,
                             take_damage_from_hitbox_collision,
@@ -579,9 +352,6 @@ impl Plugin for FighterPlugin {
                     )
                         .chain()
                         .in_set(FighterSet),
-                    set_airdodge_speed
-                        .before(PhysicsSet)
-                        .after(FighterEventSet::Act),
                     apply_traction.after(PhysicsSet),
                 ),
             )
@@ -609,4 +379,6 @@ pub struct FighterBundle {
     pub weight: Weight,
     pub traction: Traction,
     pub jump_speed: JumpSpeed,
+    pub dash_speed: DashSpeed,
+    pub run_speed: RunSpeed,
 }
