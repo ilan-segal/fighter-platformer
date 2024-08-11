@@ -68,6 +68,7 @@ pub struct Control {
     pub directional_action: BufferedInput<DirectionalAction>,
     pub held_actions: EnumSet<Action>,
     previous_stick_positions: VecDeque<Vec2>,
+    previous_held_actions: EnumSet<Action>,
 }
 
 impl Control {
@@ -147,24 +148,17 @@ fn update_control_state_from_gamepad(
     mut control: Query<(&Player, &mut Control, Option<&GamepadButtonMapping>)>,
 ) {
     for (p, mut control, mapping) in control.iter_mut() {
+        control.previous_held_actions = control.held_actions;
         // Get gamepad for player
-        let Some(gamepad) = gamepads
-            .iter()
-            .filter(|g| g.id == p.0)
-            .next()
-        else {
+        let Some(gamepad) = gamepads.iter().filter(|g| g.id == p.0).next() else {
             continue;
         };
 
         // Update control stick
         let cur_stick = control.stick;
-        control
-            .previous_stick_positions
-            .push_back(cur_stick);
+        control.previous_stick_positions.push_back(cur_stick);
         if control.previous_stick_positions.len() > SMASH_INPUT_MAX_DURATION as usize {
-            control
-                .previous_stick_positions
-                .pop_front();
+            control.previous_stick_positions.pop_front();
         }
         let axis_lx = GamepadAxis {
             gamepad,
@@ -255,6 +249,7 @@ fn buffer_actions_from_gamepad(
                     .map_button(&button_type)
                     .map(|action| (action, control))
             })
+            .filter(|(action, control)| !control.previous_held_actions.contains(*action))
             .next()
         {
             control.action = BufferedInput::Some {
