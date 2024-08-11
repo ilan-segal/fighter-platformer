@@ -157,6 +157,25 @@ impl FighterStateTransition {
                 ..Default::default()
             },
 
+            FighterState::IdleAirborne => Self {
+                iasa: IASA::immediate(|_, control, _| {
+                    if control.has_action(&Action::Shield) {
+                        Some(FighterState::Airdodge(control.stick.normalize_or_zero()))
+                    } else {
+                        None
+                    }
+                }),
+                ..Default::default()
+            },
+
+            FighterState::Airdodge(..) => Self {
+                end: StateEnd::OnFrame {
+                    frame: AIRDODGE_DURATION_FRAMES,
+                    next_state: FighterState::IdleAirborne,
+                },
+                ..Default::default()
+            },
+
             FighterState::Dash => Self {
                 end: StateEnd::OnFrame {
                     frame: DEFAULT_DASH_DURATION,
@@ -370,12 +389,16 @@ fn apply_jump_speed(
     }
 }
 
-fn set_airdodge_speed(mut query: Query<(&mut Velocity, &FighterState)>) {
-    for (mut v, s) in query.iter_mut() {
+fn set_airdodge_speed(mut query: Query<(&mut Velocity, &FighterState, &FrameCount)>) {
+    for (mut v, s, f) in query.iter_mut() {
         let FighterState::Airdodge(direction) = s else {
             continue;
         };
-        v.0 = *direction * AIRDODGE_INITIAL_SPEED;
+        if f.0 == AIRDODGE_DURATION_FRAMES - 1 {
+            v.0 = Vec2::ZERO;
+        } else {
+            v.0 = *direction * AIRDODGE_INITIAL_SPEED;
+        }
     }
 }
 
@@ -545,7 +568,6 @@ impl Plugin for FighterPlugin {
                             land,
                             go_airborne,
                             update_fighter_state,
-                            set_airdodge_speed,
                             apply_jump_speed,
                             update_gravity,
                             remove_intangible,
@@ -557,6 +579,9 @@ impl Plugin for FighterPlugin {
                     )
                         .chain()
                         .in_set(FighterSet),
+                    set_airdodge_speed
+                        .before(PhysicsSet)
+                        .after(FighterEventSet::Act),
                     apply_traction.after(PhysicsSet),
                 ),
             )

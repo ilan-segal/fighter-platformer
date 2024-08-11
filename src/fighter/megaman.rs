@@ -85,13 +85,6 @@ fn update_state_transition_rules(
 ) {
     for (mut transition, state) in q.iter_mut() {
         *transition = match state {
-            FighterState::JumpSquat => FighterStateTransition {
-                end: StateEnd::OnFrame {
-                    frame: 60,
-                    next_state: FighterState::Idle,
-                },
-                iasa: None,
-            },
             FighterState::Attack => FighterStateTransition {
                 end: StateEnd::OnFrame {
                     frame: ATTACK_DURATION,
