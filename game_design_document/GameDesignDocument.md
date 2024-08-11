@@ -1,3 +1,108 @@
+- [Game Overview](#game-overview)
+	- [Core Concept](#core-concept)
+	- [Genre](#genre)
+	- [Target Audience](#target-audience)
+	- [Platform(s)](#platforms)
+- [Gameplay](#gameplay)
+	- [Core Gameplay Loop](#core-gameplay-loop)
+	- [Mechanics and Features](#mechanics-and-features)
+		- [Units](#units)
+		- [Fighter States](#fighter-states)
+			- [First Actionable Frame (FAF) (Optional)](#first-actionable-frame-faf-optional)
+			- [Interruptible As Soon As (IASA)](#interruptible-as-soon-as-iasa)
+			- [Intangibility](#intangibility)
+			- [Super Armour](#super-armour)
+		- [Physical Attributes](#physical-attributes)
+			- [Traction](#traction)
+			- [Air Control](#air-control)
+			- [Gravity](#gravity)
+			- [Weight](#weight)
+		- [Stage Collision](#stage-collision)
+			- [Stage Spike](#stage-spike)
+			- [Floor Collision](#floor-collision)
+			- [Platform Collision](#platform-collision)
+			- [Wall Collision Algorithm](#wall-collision-algorithm)
+		- [Damage (Percent)](#damage-percent)
+		- [Knockback](#knockback)
+			- [Launch Angle](#launch-angle)
+			- [Special Launch Angles](#special-launch-angles)
+			- [Hitstun](#hitstun)
+		- [Hitboxes](#hitboxes)
+			- [Shapes](#shapes)
+			- [Groups](#groups)
+			- [Priority](#priority)
+			- [Hitbox Distance Algorithm](#hitbox-distance-algorithm)
+				- [Circle vs. Circle](#circle-vs-circle)
+				- [Circle vs. Pill](#circle-vs-pill)
+				- [Pill vs. Pill](#pill-vs-pill)
+		- [Offensive Options](#offensive-options)
+			- [Jab](#jab)
+				- [1-2-3 Combo](#1-2-3-combo)
+			- [Tilt](#tilt)
+			- [Aerials](#aerials)
+			- [Smash](#smash)
+			- [Grab](#grab)
+				- [No Chaingrabbing](#no-chaingrabbing)
+		- [Special Moves](#special-moves)
+			- [Neutral-Special](#neutral-special)
+			- [Up-Special](#up-special)
+			- [Side-Special](#side-special)
+			- [Down-Special](#down-special)
+		- [Defensive Options](#defensive-options)
+			- [Shield](#shield)
+			- [Spotdodge](#spotdodge)
+			- [Roll](#roll)
+			- [Tech](#tech)
+			- [Directional Influence (DI)](#directional-influence-di)
+			- [Smash Directional Influence (SDI)](#smash-directional-influence-sdi)
+		- [Movement Options](#movement-options)
+			- [Walk](#walk)
+			- [Dash](#dash)
+			- [Run](#run)
+			- [Jump](#jump)
+			- [Double Jump](#double-jump)
+			- [Wall Jump](#wall-jump)
+			- [Fast Fall](#fast-fall)
+			- [Hit Fall](#hit-fall)
+			- [Airdodge](#airdodge)
+			- [Waveland](#waveland)
+			- [Wavedash](#wavedash)
+			- [Moonwalk](#moonwalk)
+	- [Controls](#controls)
+		- [Actions](#actions)
+	- [Objectives](#objectives)
+- [Art and Sound](#art-and-sound)
+	- [Art Style](#art-style)
+		- [Visual References/Inspiration](#visual-referencesinspiration)
+		- [Color Palette](#color-palette)
+		- [Character Designs](#character-designs)
+		- [Environment Aesthetics](#environment-aesthetics)
+	- [Sound](#sound)
+		- [Musical Style](#musical-style)
+		- [Themes/Motifs](#themesmotifs)
+		- [Sound Effects](#sound-effects)
+- [Level Design](#level-design)
+	- [Level Structure and Flow](#level-structure-and-flow)
+	- [Environmental Hazards/Obstacles](#environmental-hazardsobstacles)
+	- [Level Progression and Pacing](#level-progression-and-pacing)
+- [User Interface](#user-interface)
+	- [Menus](#menus)
+		- [Main Menu](#main-menu)
+		- [Options Menu](#options-menu)
+		- [Character Select Menu](#character-select-menu)
+		- [Stage Select Menu](#stage-select-menu)
+		- [Battle Modifiers Menu](#battle-modifiers-menu)
+	- [HUD (Heads-Up Display)](#hud-heads-up-display)
+		- [Health Bars/Status Indicators](#health-barsstatus-indicators)
+		- [Objective Markers](#objective-markers)
+- [Technical Requirements](#technical-requirements)
+	- [Game Engine](#game-engine)
+	- [Hardware Requirements](#hardware-requirements)
+		- [Minimum System Specs](#minimum-system-specs)
+		- [Recommended System Specs](#recommended-system-specs)
+- [Credits](#credits)
+
+
 # Game Overview
 
 ## Core Concept
@@ -26,6 +131,26 @@ Unless otherwise stated, assume the following units:
 - Velocity and speed are measured in distance per frame.
 - Acceleration is measured in velocity per frame (distance per frame per frame).
 - Angles are measures in degrees.
+
+### Fighter States
+
+A fighter character is always in one of many _states_ which determine how the character interacts with other characters and the environment. Each state has several properties defined which allow a character to move between states. The exact properties of each state depends on the character to which the state is applied.
+
+Some of these state properties involve a *period* which indicates the range of frame numbers in which that property applies. That period takes on one of the following enumerated values:
+- `Always` (Applied for the whole duration, default)
+- `Range(FrameNumber, FrameNumber)`(Applied when state's frame number is between bounds, inclusive)
+
+#### First Actionable Frame (FAF) (Optional)
+The first frame in which the character is able to act after a move has ended. The exact actions allowed depend on whether the character is grounded or airborne (character is treated as `Idle` or `IdleAirborne` respectively).
+
+#### Interruptible As Soon As (IASA)
+Similar to FAF but only applies to certain action inputs.
+
+#### Intangibility
+The character cannot be hit by damaging moves. Applied during a certain period.
+
+#### Super Armour
+The character cannot be interruped or receive knockback from an attack unless it deals a certain amount of knockback. Applied during a certain period.
 
 ### Physical Attributes
 
@@ -126,15 +251,13 @@ Given:
 - A circular hitbox with centre $\mathbf{c}$ and a radius $r_c$
 
 We define three distance values: $d_a, d_b, d_p$. $d_a$ and $d_b$ are the distances from to $\mathbf{c}$ to $\mathbf{a}$ and $\mathbf{b}$ respectively:
-$
+$$
 \begin{align}
 d_a &= \|\mathbf{a} - \mathbf{c}\| \notag \\
 d_b &= \|\mathbf{b} - \mathbf{c}\| \notag
 \end{align}
-$
-The third value $d_p$ is the perpendicular (i.e. shortest) distance from $\mathbf{c}$ to the line segment beteen $\mathbf{a}$ and $\mathbf{b}$. This perpendicular distance only exists if:
-$$0 \le t \le 1$$
-where:
+$$
+The third value $d_p$ is the perpendicular (i.e. shortest) distance from $\mathbf{c}$ to the line segment beteen $\mathbf{a}$ and $\mathbf{b}$. This perpendicular distance only exists if $0 \le t \le 1$ where:
 $$t=\frac{(\mathbf{c}-\mathbf{a})\cdot(\mathbf{b}-\mathbf{a})}{\|\mathbf{b}-\mathbf{a}\|^2}$$
 If such a $t$ exists, then:
 $$d_p=\|\mathbf{c} - (\mathbf{a} + (\mathbf{b}-\mathbf{a})t)\|$$
@@ -275,6 +398,18 @@ This is another special movement option where a character jumps off the ground a
 This movement option functions exactly as in _Rivals of Aether_. You may dash in one direction and then quickly move the control stick down and then to the other side in a semi-circular motion. Doing so in a set frame window (doesn't vary by character) will cause you to accelerate in the direction opposite to your original dash, up to your running speed in the opposite direction. As of now it is unclear whether the moonwalk should last indefinitely until you stop tilting the control stick.
 
 ## Controls
+
+### Actions
+The player can input the following types of actions with their controller:
+- Action
+  - Attack
+  - Special
+  - Jump
+  - Shield
+  - Grab
+- Tilt Action (Unit vector paired with an Action)
+- Smash Action (Unit vector paired with an Action)
+
 ## Objectives
 # Art and Sound
 ## Art Style

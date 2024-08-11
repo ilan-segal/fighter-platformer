@@ -14,7 +14,8 @@ mod utils;
 mod view;
 
 use fighter::{
-    megaman::MegaMan, FighterBundle, FighterEventSet, Percent, Player as PlayerId, Weight,
+    megaman::MegaMan, FighterBundle, FighterEventSet, FighterStateTransition, JumpSpeed, Percent,
+    Player as PlayerId, Traction, Weight,
 };
 use physics::*;
 use utils::{DebugMode, Facing, FrameCount, FrameNumber, LeftRight, VisibleDuringDebug};
@@ -114,31 +115,15 @@ fn setup(
                 facing: Facing(LeftRight::Right),
                 velocity: Velocity(Vec2::new(5.0, 0.0)),
                 state: fighter::FighterState::default(),
+                state_transition_properties: FighterStateTransition::default(),
                 animation_indices: animation_indices.clone(),
                 animation_timer: view::AnimationTimer(animation_timer.clone()),
                 control: Control::default(),
                 properties: MegaMan::get_properties(),
                 percent: Percent::default(),
                 weight: Weight::default(),
-            },
-            sprite_sheet_bundle.clone(),
-            MegaMan,
-        ))
-        .with_children(MegaMan::spawn_body_hitboxes);
-    commands
-        .spawn((
-            FighterBundle {
-                tag: PlayerId(1),
-                frame: FrameCount(0),
-                facing: Facing(LeftRight::Right),
-                velocity: Velocity(Vec2::new(0.0, 0.0)),
-                state: fighter::FighterState::default(),
-                animation_indices: animation_indices.clone(),
-                animation_timer: view::AnimationTimer(animation_timer.clone()),
-                control: Control::default(),
-                properties: MegaMan::get_properties(),
-                percent: Percent::default(),
-                weight: Weight::default(),
+                traction: Traction(fighter::megaman::MEGAMAN_TRACTION),
+                jump_speed: JumpSpeed(fighter::megaman::MEGAMAN_JUMP_SPEED),
             },
             sprite_sheet_bundle.clone(),
             MegaMan,

@@ -5,7 +5,10 @@ use bevy::{
 use enumset::{EnumSet, EnumSetType};
 use std::collections::{HashMap, VecDeque};
 
-use crate::{fighter::Player, utils::FrameNumber};
+use crate::{
+    fighter::Player,
+    utils::{CardinalDirection, Directed, FrameNumber},
+};
 
 const BUFFER_SIZE: FrameNumber = 8;
 const CONTROL_STICK_DEADZONE_SIZE: f32 = 0.25;
@@ -23,11 +26,62 @@ pub enum Action {
     Taunt,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum DirectionalAction {
+    // TODO: Other types
+    Smash(CardinalDirection),
+}
+
+#[derive(Default, Debug)]
+pub enum BufferedInput<T> {
+    #[default]
+    None,
+    Some {
+        value: T,
+        stick: Vec2,
+        age: FrameNumber,
+    },
+}
+
+impl<T: Copy> BufferedInput<T> {
+    fn age_buffer(&mut self) {
+        let BufferedInput::Some { value, stick, age } = self else {
+            return;
+        };
+        let new_age = *age + 1;
+        *self = if new_age >= BUFFER_SIZE {
+            BufferedInput::None
+        } else {
+            BufferedInput::Some {
+                value: *value,
+                stick: *stick,
+                age: new_age,
+            }
+        };
+    }
+}
+
 #[derive(Component, Default, Debug)]
 pub struct Control {
     pub stick: Vec2,
+    pub action: BufferedInput<Action>,
+    pub directional_action: BufferedInput<DirectionalAction>,
     pub held_actions: EnumSet<Action>,
     previous_stick_positions: VecDeque<Vec2>,
+}
+
+impl Control {
+    pub fn clear_buffers(&mut self) {
+        self.action = BufferedInput::None;
+        self.directional_action = BufferedInput::None;
+    }
+
+    pub fn has_action(&self, action: &Action) -> bool {
+        if let BufferedInput::Some { value, .. } = self.action {
+            return &value == action;
+        }
+        return false;
+    }
 }
 
 #[derive(Component)]
@@ -150,24 +204,20 @@ pub struct KeyboardButtonMapping(HashMap<KeyCode, Action>);
 
 fn update_control_state_from_keyboard(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut control: Query<(
-        Entity,
-        &Player,
-        &mut Control,
-        Option<&KeyboardButtonMapping>,
-    )>,
-    mut commands: Commands,
+    mut control: Query<(&mut Control, Option<&KeyboardButtonMapping>), With<Player>>,
 ) {
-    if let Ok((e, _, mut control, mapping)) = control.get_single_mut() {
+    if let Ok((mut control, mapping)) = control.get_single_mut() {
         keyboard
             .get_just_pressed()
             .filter_map(|k| mapping.map_button(k))
             .for_each(|action| {
                 control.held_actions.insert(action);
                 debug!("{:?}", control);
-                commands
-                    .entity(e)
-                    .insert(Buffer { action, age: 0 });
+                control.action = BufferedInput::Some {
+                    value: action,
+                    stick: control.stick,
+                    age: 0,
+                };
             });
         keyboard
             .get_just_released()
@@ -179,25 +229,9 @@ fn update_control_state_from_keyboard(
     }
 }
 
-#[derive(Component, Debug)]
-pub struct Buffer {
-    pub action: Action,
-    pub age: FrameNumber,
-}
-
-fn age_buffer(mut q: Query<(Entity, &mut Buffer)>, mut commands: Commands) {
-    for (e, mut b) in &mut q {
-        b.age += 1;
-        if b.age == BUFFER_SIZE {
-            commands.entity(e).remove::<Buffer>();
-        }
-    }
-}
-
 fn buffer_actions_from_gamepad(
-    mut commands: Commands,
+    mut q: Query<(&Player, Option<&GamepadButtonMapping>, &mut Control)>,
     mut ev_gamepad: EventReader<GamepadEvent>,
-    player: Query<(Entity, &Player, Option<&GamepadButtonMapping>)>,
 ) {
     for (player_id, button_type) in ev_gamepad
         .read()
@@ -213,51 +247,27 @@ fn buffer_actions_from_gamepad(
             }
         })
     {
-        if let Some((e, action)) = player
-            .iter()
-            .filter(|(_, p, _)| p.0 == player_id)
-            .filter_map(|(e, _, mapping)| {
+        if let Some((action, mut control)) = q
+            .iter_mut()
+            .filter(|(p, ..)| p.0 == player_id)
+            .filter_map(|(_, mapping, control)| {
                 mapping
                     .map_button(&button_type)
-                    .map(|action| (e, action))
+                    .map(|action| (action, control))
             })
             .next()
         {
-            commands
-                .entity(e)
-                .insert(Buffer { action, age: 0 });
+            control.action = BufferedInput::Some {
+                value: action,
+                stick: control.stick,
+                age: 0,
+            };
         }
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum DirectionalActionType {
-    Smash,
-    // TODO: Implement these
-    // Clockwise,
-    // CounterClockwise,
-}
-
-#[derive(Component, Debug)]
-pub struct DirectionalAction {
-    pub action_type: DirectionalActionType,
-    pub direction: Vec2,
-    age: FrameNumber,
-}
-
-fn age_directional_action(mut q: Query<(Entity, &mut DirectionalAction)>, mut commands: Commands) {
-    for (e, mut da) in q.iter_mut() {
-        da.age += 1;
-        if da.age >= BUFFER_SIZE {
-            commands
-                .entity(e)
-                .remove::<DirectionalAction>();
-        }
-    }
-}
-
-fn detect_smash_input(mut q: Query<(Entity, &mut Control)>, mut commands: Commands) {
-    for (e, mut c) in q.iter_mut() {
+fn detect_smash_input(mut q: Query<&mut Control>) {
+    for mut c in q.iter_mut() {
         if c.stick.length() < SMASH_INPUT_THRESHOLD_DISTANCE_FROM_CENTRE {
             continue;
         }
@@ -267,19 +277,22 @@ fn detect_smash_input(mut q: Query<(Entity, &mut Control)>, mut commands: Comman
             // Stick travelled at least half of the active zone
             .any(|stick| (*stick - c.stick).length() >= 0.5);
         if is_smash_input {
-            commands
-                .entity(e)
-                .insert(DirectionalAction {
-                    action_type: DirectionalActionType::Smash,
-                    direction: c.stick,
-                    age: 0,
-                });
-        } else {
-            // TODO: Other kinds of inputs
-            return;
+            let stick = c.stick;
+            c.directional_action = BufferedInput::Some {
+                value: DirectionalAction::Smash(stick.get_cardinal_direction()),
+                stick,
+                age: 0,
+            };
         }
         // Remove all but the most recent position
         c.previous_stick_positions.clear();
+    }
+}
+
+fn age_buffers(mut q: Query<&mut Control>) {
+    for mut c in q.iter_mut() {
+        c.action.age_buffer();
+        c.directional_action.age_buffer();
     }
 }
 
@@ -291,17 +304,16 @@ impl Plugin for InputPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.add_systems(
             FixedUpdate,
-            ((age_buffer, age_directional_action), detect_smash_input)
+            (
+                age_buffers,
+                (
+                    update_control_state_from_gamepad,
+                    update_control_state_from_keyboard,
+                ),
+                (buffer_actions_from_gamepad, detect_smash_input),
+            )
                 .chain()
                 .in_set(InputSet),
-        )
-        .add_systems(
-            Update,
-            (
-                update_control_state_from_gamepad,
-                update_control_state_from_keyboard,
-                buffer_actions_from_gamepad,
-            ),
         );
     }
 }

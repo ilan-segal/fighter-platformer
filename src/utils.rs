@@ -14,16 +14,16 @@ pub enum LeftRight {
     Right,
 }
 
-impl LeftRight {
-    pub fn flip(&self) -> Self {
-        match self {
-            LeftRight::Left => LeftRight::Right,
-            LeftRight::Right => LeftRight::Left,
-        }
-    }
-}
+// impl LeftRight {
+//     pub fn flip(&self) -> Self {
+//         match self {
+//             LeftRight::Left => LeftRight::Right,
+//             LeftRight::Right => LeftRight::Left,
+//         }
+//     }
+// }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum CardinalDirection {
     Up,
     Right,
@@ -31,15 +31,25 @@ pub enum CardinalDirection {
     Down,
 }
 
-pub trait Directed {
-    fn get_cardinal_direction(&self) -> CardinalDirection;
-    fn get_sideways_direction(&self) -> LeftRight;
-    fn is_sideways(&self) -> bool {
-        match self.get_cardinal_direction() {
-            CardinalDirection::Left | CardinalDirection::Right => true,
-            _ => false,
+impl CardinalDirection {
+    pub fn horizontal(&self) -> Option<LeftRight> {
+        match self {
+            CardinalDirection::Left => Some(LeftRight::Left),
+            CardinalDirection::Right => Some(LeftRight::Right),
+            _ => None,
         }
     }
+}
+
+pub trait Directed {
+    fn get_cardinal_direction(&self) -> CardinalDirection;
+    // fn get_sideways_direction(&self) -> LeftRight;
+    // fn is_sideways(&self) -> bool {
+    //     match self.get_cardinal_direction() {
+    //         CardinalDirection::Left | CardinalDirection::Right => true,
+    //         _ => false,
+    //     }
+    // }
 }
 
 impl Directed for Vec2 {
@@ -57,13 +67,13 @@ impl Directed for Vec2 {
         }
     }
 
-    fn get_sideways_direction(&self) -> LeftRight {
-        if self.x > 0.0 {
-            LeftRight::Right
-        } else {
-            LeftRight::Left
-        }
-    }
+    // fn get_sideways_direction(&self) -> LeftRight {
+    //     if self.x > 0.0 {
+    //         LeftRight::Right
+    //     } else {
+    //         LeftRight::Left
+    //     }
+    // }
 }
 
 #[derive(Component, Clone, Copy)]
