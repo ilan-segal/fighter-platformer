@@ -72,11 +72,6 @@ pub struct Control {
 }
 
 impl Control {
-    pub fn clear_buffers(&mut self) {
-        self.action = BufferedInput::None;
-        self.directional_action = BufferedInput::None;
-    }
-
     pub fn has_action(&self, action: &Action) -> bool {
         if let BufferedInput::Some { value, .. } = self.action {
             return &value == action;
@@ -150,15 +145,23 @@ fn update_control_state_from_gamepad(
     for (p, mut control, mapping) in control.iter_mut() {
         control.previous_held_actions = control.held_actions;
         // Get gamepad for player
-        let Some(gamepad) = gamepads.iter().filter(|g| g.id == p.0).next() else {
+        let Some(gamepad) = gamepads
+            .iter()
+            .filter(|g| g.id == p.0)
+            .next()
+        else {
             continue;
         };
 
         // Update control stick
         let cur_stick = control.stick;
-        control.previous_stick_positions.push_back(cur_stick);
+        control
+            .previous_stick_positions
+            .push_back(cur_stick);
         if control.previous_stick_positions.len() > SMASH_INPUT_MAX_DURATION as usize {
-            control.previous_stick_positions.pop_front();
+            control
+                .previous_stick_positions
+                .pop_front();
         }
         let axis_lx = GamepadAxis {
             gamepad,
@@ -249,7 +252,11 @@ fn buffer_actions_from_gamepad(
                     .map_button(&button_type)
                     .map(|action| (action, control))
             })
-            .filter(|(action, control)| !control.previous_held_actions.contains(*action))
+            .filter(|(action, control)| {
+                !control
+                    .previous_held_actions
+                    .contains(*action)
+            })
             .next()
         {
             control.action = BufferedInput::Some {
@@ -274,7 +281,11 @@ fn detect_smash_input(mut q: Query<&mut Control>) {
         if is_smash_input {
             let stick = c.stick;
             c.directional_action = BufferedInput::Some {
-                value: DirectionalAction::Smash(stick.get_cardinal_direction()),
+                value: DirectionalAction::Smash(
+                    stick
+                        .get_cardinal_direction()
+                        .expect("Direction of tilt during smash input"),
+                ),
                 stick,
                 age: 0,
             };

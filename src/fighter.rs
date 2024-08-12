@@ -1,14 +1,15 @@
 use std::f32::consts::PI;
 
-use bevy::{ecs::world::DeferredWorld, prelude::*};
+use bevy::prelude::*;
 
 use crate::{
     fighter_state::{
         apply_state_transition, FighterState, FighterStateTransition, AIRDODGE_DURATION_FRAMES,
-        AIRDODGE_INITIAL_SPEED, DEFAULT_JUMP_SQUAT_DURATION,
+        AIRDODGE_INITIAL_SPEED, DEFAULT_JUMP_SQUAT_DURATION, RUN_TURNAROUND_DURATION_FRAMES,
+        TURNAROUND_DURATION_FRAMES,
     },
     hitbox::{HitboxCollision, HitboxPurpose, KnockbackAngle},
-    input::{Action, BufferedInput, Control, DirectionalAction},
+    input::{Action, Control},
     physics::{Collision, Gravity, SetVelocity, Velocity},
     utils::{Directed, FrameCount, FrameNumber},
     Airborne, AnimationIndices, AnimationTimer, Facing, PhysicsSet,
@@ -135,13 +136,16 @@ fn set_dash_speed(
         if frame.0 != 0 {
             continue;
         }
-        let direction = control
-            .stick
-            .get_cardinal_direction()
-            .horizontal()
-            .expect("Horizontal input on first frame of dash");
-        facing.0 = direction;
-        velocity.0.x = dash_speed.0 * direction.get_sign();
+        let cardinal_direction = control.stick.get_cardinal_direction();
+        if cardinal_direction.is_none() {
+            return;
+        }
+        let horizontal = cardinal_direction.unwrap().horizontal();
+        if horizontal.is_none() {
+            return;
+        }
+        facing.0 = horizontal.unwrap();
+        velocity.0.x = dash_speed.0 * horizontal.unwrap().get_sign();
     }
 }
 
@@ -149,19 +153,66 @@ fn set_dash_speed(
 pub struct RunSpeed(pub f32);
 
 fn accelerate_to_run_speed(
-    mut query: Query<(&FighterState, &mut Velocity, &RunSpeed, &Traction, &Control)>,
+    mut query: Query<(
+        &mut FighterState,
+        &mut Velocity,
+        &RunSpeed,
+        &Traction,
+        &Control,
+    )>,
 ) {
-    for (state, mut velocity, run_speed, traction, control) in query.iter_mut() {
-        if state != &FighterState::Run {
+    for (mut state, mut velocity, speed, traction, control) in query.iter_mut() {
+        if *state != FighterState::Run {
+            continue;
+        }
+        let cardinal_direction = control.stick.get_cardinal_direction();
+        if cardinal_direction.is_none() {
+            *state = FighterState::RunEnd;
+            return;
+        }
+        let horizontal = cardinal_direction.unwrap().horizontal();
+        if horizontal.is_none() {
+            *state = FighterState::RunEnd;
+            return;
+        }
+        let target_vx = horizontal
+            .expect("Horizontal input during run")
+            .get_sign()
+            * speed.0;
+        if (velocity.0.x - target_vx).abs() <= traction.0 {
+            velocity.0.x = target_vx;
+        } else if velocity.0.x < target_vx {
+            velocity.0.x += traction.0;
+        } else {
+            velocity.0.x -= traction.0;
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct WalkSpeed(pub f32);
+
+fn accelerate_to_walk_speed(
+    mut query: Query<(
+        &FighterState,
+        &mut Velocity,
+        &WalkSpeed,
+        &Traction,
+        &Control,
+    )>,
+) {
+    for (state, mut velocity, speed, traction, control) in query.iter_mut() {
+        if state != &FighterState::Walk {
             continue;
         }
         let target_vx = control
             .stick
             .get_cardinal_direction()
+            .expect("Horizontal input during walk")
             .horizontal()
-            .expect("Horizontal input during run")
+            .expect("Horizontal input during walk")
             .get_sign()
-            * run_speed.0;
+            * speed.0;
         if (velocity.0.x - target_vx).abs() <= traction.0 {
             velocity.0.x = target_vx;
         } else if velocity.0.x < target_vx {
@@ -186,6 +237,21 @@ fn apply_traction(mut query: Query<(&mut Velocity, &Traction, &FighterState), Wi
             v.0.x += t.0;
         } else {
             v.0.x -= t.0;
+        }
+    }
+}
+
+fn apply_turnaround(
+    mut query: Query<(&mut Facing, &FighterState, &FrameCount), Without<Airborne>>,
+) {
+    for (mut facing, state, frame) in query.iter_mut() {
+        let should_flip = match state {
+            FighterState::Turnaround => frame.0 == TURNAROUND_DURATION_FRAMES / 2,
+            FighterState::RunTurnaround => frame.0 == RUN_TURNAROUND_DURATION_FRAMES / 2,
+            _ => false,
+        };
+        if should_flip {
+            facing.0 = facing.0.flip();
         }
     }
 }
@@ -336,9 +402,11 @@ impl Plugin for FighterPlugin {
                             .in_set(FighterEventSet::Act),
                         (
                             update_fighter_state,
+                            apply_turnaround,
                             apply_jump_speed,
                             set_dash_speed,
                             accelerate_to_run_speed,
+                            accelerate_to_walk_speed,
                             set_airdodge_speed,
                             update_gravity,
                             land,
@@ -381,4 +449,5 @@ pub struct FighterBundle {
     pub jump_speed: JumpSpeed,
     pub dash_speed: DashSpeed,
     pub run_speed: RunSpeed,
+    pub walk_speed: WalkSpeed,
 }

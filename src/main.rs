@@ -16,7 +16,7 @@ mod view;
 
 use fighter::{
     megaman::MegaMan, DashSpeed, FighterBundle, FighterEventSet, JumpSpeed, Percent,
-    Player as PlayerId, RunSpeed, Traction, Weight,
+    Player as PlayerId, RunSpeed, Traction, WalkSpeed, Weight,
 };
 use fighter_state::FighterStateTransition;
 use physics::*;
@@ -128,6 +128,7 @@ fn setup(
                 jump_speed: JumpSpeed(fighter::megaman::MEGAMAN_JUMP_SPEED),
                 dash_speed: DashSpeed(fighter::megaman::MEGAMAN_DASH_SPEED),
                 run_speed: RunSpeed(fighter::megaman::MEGAMAN_DASH_SPEED),
+                walk_speed: WalkSpeed(fighter::megaman::MEGAMAN_WALK_SPEED),
             },
             sprite_sheet_bundle.clone(),
             MegaMan,

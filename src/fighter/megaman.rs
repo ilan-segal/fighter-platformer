@@ -20,6 +20,7 @@ const ATTACK_IASA: FrameNumber = 10;
 pub const MEGAMAN_TRACTION: f32 = 0.5;
 pub const MEGAMAN_JUMP_SPEED: f32 = 10.0;
 pub const MEGAMAN_DASH_SPEED: f32 = 5.0;
+pub const MEGAMAN_WALK_SPEED: f32 = 3.0;
 
 #[derive(Component)]
 pub struct MegaMan;

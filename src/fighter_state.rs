@@ -2,7 +2,7 @@ use bevy::{ecs::world::DeferredWorld, prelude::*};
 
 use crate::{
     input::{Action, BufferedInput, Control, DirectionalAction},
-    utils::{Facing, FrameCount, FrameNumber},
+    utils::{CardinalDirection, Directed, Facing, FrameCount, FrameNumber},
 };
 
 use crate::fighter::CROUCH_THRESHOLD;
@@ -79,31 +79,74 @@ pub const AIRDODGE_INITIAL_SPEED: f32 = 10.0;
 pub const AIRDODGE_DURATION_FRAMES: FrameNumber = 15;
 pub const AIRDODGE_INTANGIBLE_START: FrameNumber = 4;
 pub const AIRDODGE_INTANGIBLE_END: FrameNumber = 15;
-pub const TURNAROUND_DURATION_FRAMES: FrameNumber = 7;
+pub const TURNAROUND_DURATION_FRAMES: FrameNumber = 8;
 pub const RUN_TURNAROUND_DURATION_FRAMES: FrameNumber = 8;
 pub const CROUCH_TRANSITION_THRESHOLD_FRAME: FrameNumber = 6;
 
-pub const DEFAULT_LAND_CROUCH_DURATION: FrameNumber = 4;
+pub const DEFAULT_LAND_CROUCH_DURATION: FrameNumber = 6;
 pub const DEFAULT_JUMP_SQUAT_DURATION: FrameNumber = 6;
 pub const DEFAULT_DASH_DURATION: FrameNumber = 15;
 
 impl FighterStateTransition {
     pub fn default_idle_interrupt() -> StateGetter {
-        |_, control, _| {
-            if control.has_action(&Action::Jump) {
-                return Some(FighterState::JumpSquat);
-            }
+        |entity, control, world| {
             if let BufferedInput::Some { value, .. } = control.directional_action
                 && let DirectionalAction::Smash(direction) = value
                 && direction.horizontal().is_some()
             {
                 return Some(FighterState::Dash);
             }
+            if control.has_action(&Action::Jump) {
+                return Some(FighterState::JumpSquat);
+            }
+            let facing = world
+                .get::<Facing>(*entity)
+                .expect("Fighter's facing state");
             let stick = control.stick;
-            if stick.y < -CROUCH_THRESHOLD {
+            let stick_direction = stick.get_cardinal_direction();
+            if let Some(d) = stick_direction
+                && d == facing.0.flip()
+            {
+                return Some(FighterState::Turnaround);
+            } else if let Some(d) = stick_direction
+                && d == facing.0
+            {
+                return Some(FighterState::Walk);
+            }
+            if stick_direction == Some(CardinalDirection::Down) && stick.y < -CROUCH_THRESHOLD {
                 return Some(FighterState::EnterCrouch);
             }
-            None
+            return None;
+        }
+    }
+
+    pub fn default_run_interrupt() -> StateGetter {
+        |entity, control, world| {
+            if control.has_action(&Action::Jump) {
+                return Some(FighterState::JumpSquat);
+            }
+            let stick = control.stick;
+            let stick_direction = stick.get_cardinal_direction();
+            if stick_direction == Some(CardinalDirection::Down) && stick.y < -CROUCH_THRESHOLD {
+                return Some(FighterState::EnterCrouch);
+            }
+            let state = world
+                .get::<FighterState>(*entity)
+                .expect("Fighter state");
+            if let Some(left_right) = stick_direction.and_then(|d| d.horizontal()) {
+                let facing = world.get::<Facing>(*entity).unwrap();
+                if facing.0 != left_right && state != &FighterState::RunTurnaround {
+                    return Some(FighterState::RunTurnaround);
+                } else {
+                    return None;
+                }
+            } else {
+                return match state {
+                    FighterState::Run => Some(FighterState::RunEnd),
+                    FighterState::RunEnd => Some(FighterState::Idle),
+                    _ => None,
+                };
+            }
         }
     }
 
@@ -112,6 +155,64 @@ impl FighterStateTransition {
             FighterState::Idle => Self {
                 end: StateEnd::None,
                 iasa: IASA::immediate(Self::default_idle_interrupt()),
+            },
+
+            FighterState::Walk => Self {
+                end: StateEnd::None,
+                iasa: IASA::immediate(|entity, control, world| {
+                    let result = Self::default_idle_interrupt()(entity, control, world);
+                    if result == Some(FighterState::Walk) {
+                        return None;
+                    } else if control
+                        .stick
+                        .get_cardinal_direction()
+                        .filter(|d| d.is_horizontal())
+                        .is_none()
+                    {
+                        return Some(FighterState::Idle);
+                    }
+                    return result;
+                }),
+            },
+
+            FighterState::Turnaround => Self {
+                end: StateEnd::OnFrame {
+                    frame: TURNAROUND_DURATION_FRAMES,
+                    next_state: FighterState::Idle,
+                },
+                iasa: IASA::immediate(|_, control, _| {
+                    if let BufferedInput::Some { value, .. } = control.directional_action
+                        && let DirectionalAction::Smash(direction) = value
+                        && direction.horizontal().is_some()
+                    {
+                        return Some(FighterState::Dash);
+                    }
+                    if control.has_action(&Action::Jump) {
+                        return Some(FighterState::JumpSquat);
+                    }
+                    return None;
+                }),
+            },
+
+            FighterState::Run => Self {
+                end: StateEnd::None,
+                iasa: IASA::immediate(Self::default_run_interrupt()),
+            },
+
+            FighterState::RunEnd => Self {
+                end: StateEnd::OnFrame {
+                    frame: 1,
+                    next_state: FighterState::RunTurnaround,
+                },
+                iasa: IASA::immediate(Self::default_run_interrupt()),
+            },
+
+            FighterState::RunTurnaround => Self {
+                end: StateEnd::OnFrame {
+                    frame: RUN_TURNAROUND_DURATION_FRAMES,
+                    next_state: FighterState::Run,
+                },
+                iasa: IASA::immediate(Self::default_run_interrupt()),
             },
 
             FighterState::EnterCrouch => Self {
@@ -285,7 +386,19 @@ pub fn apply_state_transition(
             );
             *state = new_state;
             state_frame.0 = 0;
-            control.clear_buffers();
+            // control.clear_buffers();
+            match new_state {
+                FighterState::Dash => {
+                    control.directional_action = BufferedInput::None;
+                }
+                FighterState::Airdodge(..) => {
+                    control.directional_action = BufferedInput::None;
+                    control.action = BufferedInput::None;
+                }
+                _ => {
+                    control.action = BufferedInput::None;
+                }
+            }
         }
         // Compute natural state end
         else if let StateEnd::OnFrame { frame, next_state } = props.end

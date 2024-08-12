@@ -15,12 +15,12 @@ pub enum LeftRight {
 }
 
 impl LeftRight {
-    // pub fn flip(&self) -> Self {
-    //     match self {
-    //         LeftRight::Left => LeftRight::Right,
-    //         LeftRight::Right => LeftRight::Left,
-    //     }
-    // }
+    pub fn flip(&self) -> Self {
+        match self {
+            LeftRight::Left => LeftRight::Right,
+            LeftRight::Right => LeftRight::Left,
+        }
+    }
 
     pub fn get_sign(&self) -> f32 {
         match self {
@@ -46,10 +46,24 @@ impl CardinalDirection {
             _ => None,
         }
     }
+
+    pub fn is_horizontal(&self) -> bool {
+        self.horizontal().is_some()
+    }
+}
+
+impl PartialEq<LeftRight> for CardinalDirection {
+    fn eq(&self, other: &LeftRight) -> bool {
+        match self {
+            CardinalDirection::Up | CardinalDirection::Down => false,
+            CardinalDirection::Left => other == &LeftRight::Left,
+            CardinalDirection::Right => other == &LeftRight::Right,
+        }
+    }
 }
 
 pub trait Directed {
-    fn get_cardinal_direction(&self) -> CardinalDirection;
+    fn get_cardinal_direction(&self) -> Option<CardinalDirection>;
     // fn get_sideways_direction(&self) -> LeftRight;
     // fn is_sideways(&self) -> bool {
     //     match self.get_cardinal_direction() {
@@ -60,17 +74,20 @@ pub trait Directed {
 }
 
 impl Directed for Vec2 {
-    fn get_cardinal_direction(&self) -> CardinalDirection {
+    fn get_cardinal_direction(&self) -> Option<CardinalDirection> {
+        if self == &Vec2::ZERO {
+            return None;
+        }
         if self.y > self.x.abs() {
             if self.y > 0.0 {
-                CardinalDirection::Up
+                Some(CardinalDirection::Up)
             } else {
-                CardinalDirection::Down
+                Some(CardinalDirection::Down)
             }
         } else if self.x > 0.0 {
-            CardinalDirection::Right
+            Some(CardinalDirection::Right)
         } else {
-            CardinalDirection::Left
+            Some(CardinalDirection::Left)
         }
     }
 
