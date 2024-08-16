@@ -91,15 +91,13 @@ fn update_state_transition_rules(
                 },
                 iasa: Some(IASA {
                     frame: ATTACK_IASA,
-                    state_getter: |entity, control, world| {
-                        if let Some(LemonCount(count)) = world.get::<LemonCount>(*entity)
+                    state_getter: |data| {
+                        if let Some(LemonCount(count)) = data.component::<LemonCount>()
                             && count >= &MAX_LEMONS_AT_A_TIME
                         {
                             return None;
                         }
-                        if let BufferedInput::Some { value, .. } = control.action
-                            && value == Action::Attack
-                        {
+                        if data.control.has_action(&Action::Attack) {
                             Some(FighterState::Attack)
                         } else {
                             None
