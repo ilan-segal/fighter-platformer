@@ -219,7 +219,7 @@ struct LemonBundle {
     projectile: Projectile,
 }
 
-const LEMON_VELOCITY: f32 = 0.5;
+const LEMON_VELOCITY: f32 = 7.5;
 const LEMON_DISTANCE: f32 = 300.0;
 
 impl LemonBundle {
