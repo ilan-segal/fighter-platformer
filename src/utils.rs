@@ -78,7 +78,7 @@ impl Directed for Vec2 {
         if self == &Vec2::ZERO {
             return None;
         }
-        if self.y > self.x.abs() {
+        if self.y.abs() > self.x.abs() {
             if self.y > 0.0 {
                 Some(CardinalDirection::Up)
             } else {

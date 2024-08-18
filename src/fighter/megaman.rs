@@ -7,7 +7,7 @@ use crate::{
     hitbox::{
         Hitbox, HitboxBundle, HitboxGroup, HitboxGroupBundle, HitboxPurpose, KnockbackAngle, Shape,
     },
-    input::{Action, BufferedInput},
+    input::Action,
     projectile::Projectile,
     utils::{Facing, FrameCount, FrameNumber, LeftRight, Lifetime},
     AnimationIndices, AnimationUpdate, AnimationUpdateEvent, Velocity,
@@ -219,7 +219,7 @@ struct LemonBundle {
     projectile: Projectile,
 }
 
-const LEMON_VELOCITY: f32 = 7.5;
+const LEMON_VELOCITY: f32 = 0.5;
 const LEMON_DISTANCE: f32 = 300.0;
 
 impl LemonBundle {

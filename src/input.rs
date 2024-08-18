@@ -6,7 +6,7 @@ use enumset::{EnumSet, EnumSetType};
 use std::collections::{HashMap, VecDeque};
 
 use crate::{
-    fighter::Player,
+    fighter::PlayerId,
     utils::{CardinalDirection, Directed, FrameNumber},
 };
 
@@ -140,7 +140,7 @@ fn update_control_state_from_gamepad(
     gamepads: Res<Gamepads>,
     axes: Res<Axis<GamepadAxis>>,
     buttons: Res<ButtonInput<GamepadButton>>,
-    mut control: Query<(&Player, &mut Control, Option<&GamepadButtonMapping>)>,
+    mut control: Query<(&PlayerId, &mut Control, Option<&GamepadButtonMapping>)>,
 ) {
     for (p, mut control, mapping) in control.iter_mut() {
         control.previous_held_actions = control.held_actions;
@@ -201,7 +201,7 @@ pub struct KeyboardButtonMapping(HashMap<KeyCode, Action>);
 
 fn update_control_state_from_keyboard(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut control: Query<(&mut Control, Option<&KeyboardButtonMapping>), With<Player>>,
+    mut control: Query<(&mut Control, Option<&KeyboardButtonMapping>), With<PlayerId>>,
 ) {
     if let Ok((mut control, mapping)) = control.get_single_mut() {
         keyboard
@@ -227,7 +227,7 @@ fn update_control_state_from_keyboard(
 }
 
 fn buffer_actions_from_gamepad(
-    mut q: Query<(&Player, Option<&GamepadButtonMapping>, &mut Control)>,
+    mut q: Query<(&PlayerId, Option<&GamepadButtonMapping>, &mut Control)>,
     mut ev_gamepad: EventReader<GamepadEvent>,
 ) {
     for (player_id, button_type) in ev_gamepad

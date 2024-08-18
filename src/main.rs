@@ -1,7 +1,7 @@
 #![feature(if_let_guard)]
 #![feature(let_chains)]
 
-use bevy::{log::LogPlugin, prelude::*, sprite::Anchor};
+use bevy::{log::LogPlugin, prelude::*, render::view::RenderLayers, sprite::Anchor};
 use input::{Control, InputSet};
 use iyes_perf_ui::prelude::*;
 
@@ -15,8 +15,8 @@ mod utils;
 mod view;
 
 use fighter::{
-    megaman::MegaMan, DashSpeed, FighterBundle, FighterEventSet, JumpSpeed, Percent,
-    Player as PlayerId, RunSpeed, Traction, WalkSpeed, Weight,
+    megaman::MegaMan, DashSpeed, FighterBundle, FighterEventSet, JumpSpeed, Percent, PlayerId,
+    RunSpeed, Traction, WalkSpeed, Weight,
 };
 use fighter_state::FighterStateTransition;
 use physics::*;
@@ -106,9 +106,18 @@ fn setup(
             ..default()
         },
     );
-    // let state_machine = PlayerStateMachine::default();
 
-    commands.spawn(Camera2dBundle::default());
+    // Game Camera
+    commands.spawn((
+        Camera2dBundle {
+            camera: Camera {
+                order: 0,
+                ..default()
+            },
+            ..Default::default()
+        },
+        RenderLayers::layer(0),
+    ));
     commands
         .spawn((
             FighterBundle {
@@ -152,5 +161,57 @@ fn setup(
             breadth: 800.0,
         },
     ));
-    commands.spawn((PerfUiCompleteBundle::default(), VisibleDuringDebug));
+    commands.spawn((
+        PerfUiCompleteBundle::default(),
+        VisibleDuringDebug,
+        RenderLayers::layer(1),
+    ));
+
+    // HUD Camera
+    commands.spawn((
+        Camera2dBundle {
+            camera: Camera {
+                order: 1,
+                ..default()
+            },
+            ..default()
+        },
+        RenderLayers::layer(1),
+    ));
+
+    let font_handle = asset_server.load("fonts/Jersey10-Regular.ttf");
+    commands
+        .spawn((
+            NodeBundle {
+                style: Style {
+                    width: Val::Percent(100.0),
+                    height: Val::Px(100.0),
+                    align_items: AlignItems::Center,
+                    align_self: AlignSelf::End,
+                    justify_content: JustifyContent::SpaceAround,
+                    ..default()
+                },
+                background_color: BackgroundColor(Color::LinearRgba(LinearRgba {
+                    red: 0.1,
+                    green: 0.1,
+                    blue: 0.1,
+                    alpha: 0.5,
+                })),
+                ..default()
+            },
+            RenderLayers::layer(1),
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                TextBundle::from_section(
+                    "0%",
+                    TextStyle {
+                        font: font_handle.clone(),
+                        font_size: 40.0,
+                        ..default()
+                    },
+                ),
+                PlayerId(0),
+            ));
+        });
 }

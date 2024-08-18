@@ -21,7 +21,7 @@ pub mod megaman;
 pub const CROUCH_THRESHOLD: f32 = 0.4;
 
 #[derive(Component)]
-pub struct Player(pub usize);
+pub struct PlayerId(pub usize);
 
 #[derive(Component)]
 #[allow(dead_code)]
@@ -380,6 +380,20 @@ fn take_damage_from_hitbox_collision(
     }
 }
 
+fn update_damage_display(
+    q_fighter: Query<(&PlayerId, &Percent), Changed<Percent>>,
+    mut q_display: Query<(&PlayerId, &mut Text)>,
+) {
+    for (fighter_id, percent) in q_fighter.iter() {
+        for (display_id, mut text) in q_display.iter_mut() {
+            if fighter_id.0 != display_id.0 {
+                continue;
+            }
+            text.sections[0].value = format!("{:.1}%", percent.0);
+        }
+    }
+}
+
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FighterEventSet {
     Act,
@@ -393,6 +407,7 @@ pub struct FighterPlugin;
 impl Plugin for FighterPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(megaman::MegaManPlugin)
+            .add_systems(Update, update_damage_display)
             .add_systems(
                 FixedUpdate,
                 (
@@ -433,7 +448,7 @@ impl Plugin for FighterPlugin {
 
 #[derive(Bundle)]
 pub struct FighterBundle {
-    pub tag: Player,
+    pub tag: PlayerId,
     pub frame: FrameCount,
     pub facing: Facing,
     pub velocity: Velocity,

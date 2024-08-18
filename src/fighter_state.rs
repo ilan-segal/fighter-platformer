@@ -186,13 +186,7 @@ fn try_crouch(data: &InterruptPlayerData) -> Option<FighterState> {
 }
 
 fn try_end_crouch(data: &InterruptPlayerData) -> Option<FighterState> {
-    if let Some(direction) = data
-        .control
-        .stick
-        .get_cardinal_direction()
-        && direction == CardinalDirection::Down
-        && data.control.stick.y >= -CROUCH_THRESHOLD
-    {
+    if data.control.stick.y >= -CROUCH_THRESHOLD {
         Some(FighterState::ExitCrouch)
     } else {
         None
@@ -239,10 +233,19 @@ fn try_airdodge(data: &InterruptPlayerData) -> Option<FighterState> {
     }
 }
 
+fn try_attack(data: &InterruptPlayerData) -> Option<FighterState> {
+    if data.control.has_action(&Action::Attack) {
+        Some(FighterState::Attack)
+    } else {
+        None
+    }
+}
+
 impl FighterStateTransition {
     pub fn default_idle_interrupt() -> StateGetter {
         |data| {
             try_dash(data)
+                .or_else(|| try_attack(data))
                 .or_else(|| try_jump(data))
                 .or_else(|| try_turnaround(data))
                 .or_else(|| try_walk(data))
