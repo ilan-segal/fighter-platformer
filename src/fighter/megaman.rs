@@ -283,6 +283,7 @@ fn shoot_lemon(
         let lemon_position = Vec3::new(20.0, 23.0, 10.0);
         let mut transform = global_transform.compute_transform();
         transform.translation += lemon_position * transform.scale;
+        // transform.scale.x *= facing.0.get_sign();
 
         commands
             .spawn(LemonBundle::new(
@@ -293,17 +294,17 @@ fn shoot_lemon(
             ))
             .with_children(|parent| {
                 parent.spawn(HitboxBundle {
-                    transform: TransformBundle {
-                        local: Transform::from_scale(Vec3::new(
-                            match facing.0 {
-                                LeftRight::Left => -1.0,
-                                LeftRight::Right => 1.0,
-                            },
-                            1.0,
-                            1.0,
-                        )),
-                        ..Default::default()
-                    },
+                    // transform: TransformBundle {
+                    //     local: Transform::from_scale(Vec3::new(
+                    //         match facing.0 {
+                    //             LeftRight::Left => -1.0,
+                    //             LeftRight::Right => 1.0,
+                    //         },
+                    //         1.0,
+                    //         1.0,
+                    //     )),
+                    //     ..Default::default()
+                    // },
                     hitbox: Hitbox {
                         shape: Shape::Circle(5.0),
                         purpose: HitboxPurpose::Damage {
@@ -313,6 +314,7 @@ fn shoot_lemon(
                             angle: KnockbackAngle::Fixed(45.0),
                         },
                     },
+                    ..Default::default()
                 });
             });
     }
