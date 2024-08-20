@@ -1,5 +1,6 @@
 #![feature(if_let_guard)]
 #![feature(let_chains)]
+#![feature(iter_map_windows)]
 
 use bevy::{log::LogPlugin, prelude::*, render::view::RenderLayers, sprite::Anchor};
 use input::{Control, InputSet};

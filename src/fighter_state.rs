@@ -1,7 +1,7 @@
 use bevy::{ecs::world::DeferredWorld, prelude::*};
 
 use crate::{
-    input::{Action, BufferedInput, Control, DirectionalAction},
+    input::{Action, BufferedInput, Control, DirectionalAction, RotationDirection},
     utils::{CardinalDirection, Directed, Facing, FrameCount, FrameNumber},
 };
 
@@ -21,6 +21,7 @@ pub enum FighterState {
     JumpSquat,
     Walk,
     Dash,
+    Moonwalk,
     Run,
     // Ensures that the player cannot Dash out of a Run by going Run -> Idle -> Dash
     RunEnd,
@@ -48,6 +49,7 @@ impl FighterState {
             | Self::RunEnd
             | Self::Dash
             | Self::Run
+            | Self::Moonwalk
             | Self::Crouch
             | Self::EnterCrouch
             | Self::ExitCrouch => true,
@@ -56,7 +58,7 @@ impl FighterState {
     }
     pub fn is_exempt_from_normal_traction(&self) -> bool {
         match self {
-            Self::JumpSquat | Self::Walk | Self::Run | Self::Dash => true,
+            Self::JumpSquat | Self::Walk | Self::Run | Self::Dash | Self::Moonwalk => true,
             _ => false,
         }
     }
@@ -101,6 +103,22 @@ fn try_dash(data: &InterruptPlayerData) -> Option<FighterState> {
         && (horizontal != data.component::<Facing>().unwrap().0 || can_dash_same_direction)
     {
         return Some(FighterState::Dash);
+    } else {
+        return None;
+    }
+}
+
+fn try_moonwalk(data: &InterruptPlayerData) -> Option<FighterState> {
+    if let BufferedInput::Some { value, .. } = data.control.directional_action
+        && let DirectionalAction::HalfCircle(direction, rotation) = value
+    {
+        return match (direction, rotation) {
+            (CardinalDirection::Left, RotationDirection::Clockwise)
+            | (CardinalDirection::Right, RotationDirection::CounterClockwise) => {
+                Some(FighterState::Moonwalk)
+            }
+            _ => None,
+        };
     } else {
         return None;
     }
@@ -348,7 +366,19 @@ impl FighterStateTransition {
                     frame: DEFAULT_DASH_DURATION,
                     next_state: FighterState::Run,
                 },
-                iasa: IASA::immediate(|data| try_jump(data).or_else(|| try_dash(data))),
+                iasa: IASA::immediate(|data| {
+                    try_jump(data)
+                        .or_else(|| try_moonwalk(data))
+                        .or_else(|| try_dash(data))
+                }),
+            },
+
+            FighterState::Moonwalk => Self {
+                end: StateEnd::OnFrame {
+                    frame: DEFAULT_DASH_DURATION,
+                    next_state: FighterState::Idle,
+                },
+                iasa: IASA::immediate(|data| try_jump(data).or_else(|| try_moonwalk(data))),
             },
 
             _ => Self::default(),
@@ -456,7 +486,7 @@ pub fn apply_state_transition(
             state_frame.0 = 0;
             // control.clear_buffers();
             match new_state {
-                FighterState::Dash => {
+                FighterState::Dash | FighterState::Moonwalk => {
                     control.directional_action = BufferedInput::None;
                 }
                 FighterState::Airdodge(..) => {

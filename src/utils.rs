@@ -39,6 +39,15 @@ pub enum CardinalDirection {
 }
 
 impl CardinalDirection {
+    pub fn flip(&self) -> Self {
+        match self {
+            CardinalDirection::Up => CardinalDirection::Down,
+            CardinalDirection::Down => CardinalDirection::Up,
+            CardinalDirection::Left => CardinalDirection::Right,
+            CardinalDirection::Right => CardinalDirection::Left,
+        }
+    }
+
     pub fn horizontal(&self) -> Option<LeftRight> {
         match self {
             CardinalDirection::Left => Some(LeftRight::Left),

@@ -189,6 +189,45 @@ fn accelerate_to_run_speed(
     }
 }
 
+fn accelerate_to_moonwalk_speed(
+    mut query: Query<(
+        &mut FighterState,
+        &mut Velocity,
+        &RunSpeed,
+        &Traction,
+        &Control,
+    )>,
+) {
+    for (mut state, mut velocity, speed, traction, control) in query.iter_mut() {
+        if *state != FighterState::Moonwalk {
+            continue;
+        }
+        let cardinal_direction = control.stick.get_cardinal_direction();
+        if cardinal_direction.is_none() {
+            *state = FighterState::Idle;
+            return;
+        }
+        let horizontal = cardinal_direction.unwrap().horizontal();
+        if horizontal.is_none() {
+            *state = FighterState::Idle;
+            return;
+        }
+        let target_vx = horizontal
+            .expect("Horizontal input during moonwalk")
+            .get_sign()
+            * speed.0
+            * 2.0;
+        let dv = traction.0 * 4.0;
+        if (velocity.0.x - target_vx).abs() <= dv {
+            velocity.0.x = target_vx;
+        } else if velocity.0.x < target_vx {
+            velocity.0.x += dv;
+        } else {
+            velocity.0.x -= dv;
+        }
+    }
+}
+
 #[derive(Component)]
 pub struct WalkSpeed(pub f32);
 
@@ -421,6 +460,7 @@ impl Plugin for FighterPlugin {
                             apply_jump_speed,
                             set_dash_speed,
                             accelerate_to_run_speed,
+                            accelerate_to_moonwalk_speed,
                             accelerate_to_walk_speed,
                             set_airdodge_speed,
                             update_gravity,
