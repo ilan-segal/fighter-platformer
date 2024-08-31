@@ -26,7 +26,7 @@ pub enum FighterState {
     // Ensures that the player cannot Dash out of a Run by going Run -> Idle -> Dash
     RunEnd,
     Airdodge(Vec2),
-    Attack,
+    Attack(u8),
 }
 
 impl FighterState {
@@ -253,7 +253,7 @@ fn try_airdodge(data: &InterruptPlayerData) -> Option<FighterState> {
 
 fn try_attack(data: &InterruptPlayerData) -> Option<FighterState> {
     if data.control.has_action(&Action::Attack) {
-        Some(FighterState::Attack)
+        Some(FighterState::Attack(0))
     } else {
         None
     }

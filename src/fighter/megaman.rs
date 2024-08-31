@@ -1,5 +1,5 @@
 use super::{update_fighter_state, FighterProperties, FighterState, FighterStateTransition};
-use bevy::{ecs::component::StorageType, prelude::*};
+use bevy::prelude::*;
 
 use crate::{
     fighter::{FighterEventSet, FighterStateUpdate},
@@ -76,6 +76,29 @@ impl MegaMan {
 //     }
 // }
 
+fn get_attack_transition<const STAGE: u8>() -> FighterStateTransition {
+    FighterStateTransition {
+        end: StateEnd::OnFrame {
+            frame: ATTACK_DURATION,
+            next_state: FighterState::Idle,
+        },
+        iasa: if STAGE < MAX_ATTACK_STAGE {
+            Some(IASA {
+                frame: ATTACK_IASA,
+                state_getter: |data| {
+                    if data.control.has_action(&Action::Attack) {
+                        Some(FighterState::Attack(STAGE + 1))
+                    } else {
+                        None
+                    }
+                },
+            })
+        } else {
+            None
+        },
+    }
+}
+
 fn update_state_transition_rules(
     mut q: Query<
         (&mut FighterStateTransition, &FighterState),
@@ -84,27 +107,9 @@ fn update_state_transition_rules(
 ) {
     for (mut transition, state) in q.iter_mut() {
         *transition = match state {
-            FighterState::Attack => FighterStateTransition {
-                end: StateEnd::OnFrame {
-                    frame: ATTACK_DURATION,
-                    next_state: FighterState::Idle,
-                },
-                iasa: Some(IASA {
-                    frame: ATTACK_IASA,
-                    state_getter: |data| {
-                        if let Some(LemonCount(count)) = data.component::<LemonCount>()
-                            && count >= &MAX_LEMONS_AT_A_TIME
-                        {
-                            return None;
-                        }
-                        if data.control.has_action(&Action::Attack) {
-                            Some(FighterState::Attack)
-                        } else {
-                            None
-                        }
-                    },
-                }),
-            },
+            FighterState::Attack(0) => get_attack_transition::<0>(),
+            FighterState::Attack(1) => get_attack_transition::<1>(),
+            FighterState::Attack(..) => get_attack_transition::<MAX_ATTACK_STAGE>(),
             _ => FighterStateTransition::default_for_state(state),
         };
         debug!("{:?}", transition);
@@ -175,7 +180,7 @@ fn animation_for_state(state: &FighterState) -> Option<AnimationUpdate> {
             indices: AnimationIndices { first: 5, last: 14 },
             seconds_per_frame: 0.1,
         }),
-        FighterState::Attack => Some(AnimationUpdate::SingleFrame(43)),
+        FighterState::Attack(..) => Some(AnimationUpdate::SingleFrame(43)),
         _ => None,
     }
 }
@@ -187,31 +192,8 @@ fn load_lemon_sprite(mut res: ResMut<LemonSprite>, asset_server: Res<AssetServer
     res.0 = Some(asset_server.load("sprites/megaman/lemon.png"));
 }
 
-struct Lemon {
-    owner: Entity,
-}
-
-impl Component for Lemon {
-    const STORAGE_TYPE: StorageType = StorageType::Table;
-
-    fn register_component_hooks(hooks: &mut bevy::ecs::component::ComponentHooks) {
-        hooks.on_remove(|mut world, entity, _| {
-            let lemon = world
-                .get::<Lemon>(entity)
-                .expect("Lemon entity about to be despawned");
-            let Some(mut lemon_count) = world.get_mut::<LemonCount>(lemon.owner) else {
-                return;
-            };
-            if lemon_count.0 > 0 {
-                lemon_count.0 -= 1;
-            }
-        });
-    }
-}
-
 #[derive(Bundle)]
 struct LemonBundle {
-    lemon: Lemon,
     sprite: SpriteBundle,
     velocity: Velocity,
     lifetime: Lifetime,
@@ -219,8 +201,8 @@ struct LemonBundle {
     projectile: Projectile,
 }
 
-const LEMON_VELOCITY: f32 = 7.5;
-const LEMON_DISTANCE: f32 = 300.0;
+const LEMON_VELOCITY: f32 = 10.0;
+const LEMON_DISTANCE: f32 = 450.0;
 
 impl LemonBundle {
     fn new(owner: Entity, texture: Handle<Image>, facing: &Facing, transform: Transform) -> Self {
@@ -230,7 +212,6 @@ impl LemonBundle {
         };
         let lifetime = (LEMON_DISTANCE / LEMON_VELOCITY) as FrameNumber;
         LemonBundle {
-            lemon: Lemon { owner },
             sprite: SpriteBundle {
                 texture,
                 transform,
@@ -244,10 +225,7 @@ impl LemonBundle {
     }
 }
 
-#[derive(Component)]
-struct LemonCount(u8);
-
-const MAX_LEMONS_AT_A_TIME: u8 = 3;
+const MAX_ATTACK_STAGE: u8 = 2;
 
 fn shoot_lemon(
     mut commands: Commands,
@@ -257,27 +235,16 @@ fn shoot_lemon(
         &FrameCount,
         &GlobalTransform,
         &Facing,
-        Option<&mut LemonCount>,
     )>,
     lemon_sprite: Res<LemonSprite>,
 ) {
-    for (entity, state, FrameCount(frame), global_transform, facing, lemon_count) in q.iter_mut() {
-        if state != &FighterState::Attack || frame != &ATTACK_SHOOT_FRAME {
+    for (entity, state, FrameCount(frame), global_transform, facing) in q.iter_mut() {
+        let FighterState::Attack(..) = state else {
             continue;
-        }
+        };
 
-        match lemon_count {
-            Some(count) if count.0 >= MAX_LEMONS_AT_A_TIME => {
-                continue;
-            }
-            Some(mut count) => {
-                count.0 += 1;
-            }
-            None => {
-                commands
-                    .entity(entity)
-                    .insert(LemonCount(1));
-            }
+        if frame != &ATTACK_SHOOT_FRAME {
+            continue;
         }
 
         let lemon_position = Vec3::new(20.0, 23.0, 10.0);
